@@ -112,6 +112,8 @@ class Parser extends HtmlParser
 
         $products = $this->getVendor()->getDownloader()->fetch( [ $link ], true )[ 0 ];
         $products_data = json_decode( $products[ 'data' ], true, 512, JSON_THROW_ON_ERROR );
+        
+        if ( empty( $products_data[ 'items' ][ 0 ][ 'matrixchilditems_detail' ] ) ) return [];
 
         $product_name = $products_data[ 'items' ][ 0 ][ 'storedisplayname2' ];
         
