@@ -27,13 +27,13 @@ class Parser extends HtmlParser
             $name  = trim( $c->filter( 'td' )->getNode( 0 )->textContent, ' : ' );
             $value = trim( $c->filter( 'td' )->getNode( 1 )->textContent, '  ' );
             
-            if ( $name == 'Brand' ) {
+            if ( $name === 'Brand' ) {
                 $this->brand = $value;
             }
-            elseif ( $name == 'Weight (oz)' ) {
+            elseif ( $name === 'Weight (oz)' ) {
                 $this->weight = FeedHelper::convertLbsFromOz( (float) $value );
             }
-            elseif ( $name == 'Length' ) {
+            elseif ( $name === 'Length' ) {
                 $this->dims[ 'z' ] = (float) ( str_replace("'", '.', trim( $value, '" ') ) );
             }
             else {
@@ -49,16 +49,6 @@ class Parser extends HtmlParser
                 $link = 'https://www.mudhole.com' . $link;
             }
             $this->files[] = [ 'name' => $name, 'link' => $link ];
-        });
-    
-        // Videos
-        $this->filter( 'div.youtubevideo' )->each( function ( ParserCrawler $c )  {
-            $yt_src = $c->getAttr( 'div', 'data-yt-src' );
-            if ( !empty( $yt_src ) ) {
-                $this->videos[] = [ 'name' => 'Video',
-                                    'video' => 'https://www.youtube.com/watch?v=' . $yt_src,
-                                    'provider' => 'YouTube' ];
-            }
         });
     
         // Description
@@ -95,9 +85,6 @@ class Parser extends HtmlParser
 
     public function getCostToUs(): float
     {
-        if ( $this->isGroup() ) {
-            return 0;
-        }
         return $this->getMoney( 'span[itemprop="price"]' );
     }
     
@@ -111,12 +98,12 @@ class Parser extends HtmlParser
         $images = $this->getSrcImages( '.pinterest-image a#btn-lightbox-image noscript img' ) ?:
                   $this->getSrcImages( '.pinterest-image a#btn-lightbox-image img' );
         
-        for ( $i = 0; $i < count( $images ); $i++ ) {
-            $filename = pathinfo( $images[ $i ] );
+        foreach ( $images as $key => $value ) {
+            $filename = pathinfo( $value );
             $filename = $filename[ 'basename' ];
             if ( str_contains( $filename, '?' ) ) {
                 $new_filename = substr( $filename, 0, strpos( $filename, '?' ) );
-                $images[ $i ] = str_replace( $filename, $new_filename, $images[ $i ] );
+                $images[ $key ] = str_replace( $filename, $new_filename, $value );
             }
         }
         
@@ -163,6 +150,25 @@ class Parser extends HtmlParser
     
     public function getVideos(): array
     {
+        $this->filter( 'div.youtubevideo' )->each( function ( ParserCrawler $c )  {
+            $yt_src = $c->getAttr( 'div', 'data-yt-src' );
+            if ( !empty( $yt_src ) ) {
+                $this->videos[] = [ 'name' => $this->getProduct(),
+                                    'video' => 'https://www.youtube.com/watch?v=' . $yt_src,
+                                    'provider' => 'YouTube' ];
+            }
+        });
+    
+        $this->filter( 'div#item-videos iframe' )->each( function ( ParserCrawler $c )  {
+            $src = $c->getAttr( 'iframe', 'src' );
+            if ( !empty( $src ) ) {
+                $url_parts = parse_url( $src );
+                $this->videos[] = [ 'name' => $this->getProduct(),
+                                    'video' => $src,
+                                    'provider' => $url_parts[ 'host' ] ];
+            }
+        });
+        
         return $this->videos;
     }
     
