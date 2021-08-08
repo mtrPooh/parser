@@ -16,6 +16,7 @@ class Parser extends HtmlParser
     private ?float  $weight = null;
     private ?array  $attrs  = null;
     private ?string $descr  = null;
+    private array   $shorts = [];
     private array   $files  = [];
     private array   $videos = [];
     private array   $dims   = [];
@@ -36,6 +37,12 @@ class Parser extends HtmlParser
             elseif ( $name === 'Length' ) {
                 $this->dims[ 'z' ] = (float) ( str_replace("'", '.', trim( $value, '" ') ) );
             }
+            elseif ( $name === 'Width' ) {
+                $this->dims[ 'x' ] = (float) ( str_replace("'", '.', trim( $value, '" ') ) );
+            }
+            elseif ( $name === 'Height' ) {
+                $this->dims[ 'y' ] = (float) ( str_replace("'", '.', trim( $value, '" ') ) );
+            }
             else {
                 $this->attrs[ $name ] = $value;
             }
@@ -51,6 +58,11 @@ class Parser extends HtmlParser
             $this->files[] = [ 'name' => $name, 'link' => $link ];
         });
 
+        // Short Description
+        $this->filter( '.text-cont ul li' )->each( function ( ParserCrawler $c )  {
+            $this->shorts[] = trim( $c->text(), '  ' );
+        });
+
         // Description
         // html-code on site is incorrect and getHtml() return unnecessary code
         // it need to remove from Description
@@ -62,10 +74,29 @@ class Parser extends HtmlParser
         $del[] = '<div class="tab-pane" id="videos"></div>';
         $del[] = '<div class="tab-pane" id="Resources"></div>';
         $del[] = '<div class="tab-pane" id="spec"></div>';
+        $del[] = '<hr>';
 
         $this->descr = str_ireplace( [ $videos, $resources, $spec ], '', $this->descr );
         $this->descr = str_ireplace( $del, '', $this->descr );
-        $this->descr = trim( preg_replace( '%<table.*?</table>%uis', '', $this->descr ) );
+
+        $this->filter( 'p' )->each( function ( ParserCrawler $c )  {
+            $html = $c->getHtml( 'p' );
+            $text = $c->getText( 'p' );
+            if ( str_contains( $text, '$' ) ) {
+                $this->descr = str_ireplace( $html, '', $this->descr );
+            }
+        });
+
+        if ( !empty( $this->shorts ) ) {
+            $this->descr = str_ireplace( $this->getHtml( '.text-cont ul' ), '##ul##', $this->descr);
+        }
+
+        $this->descr = preg_replace( '%<h\d+>.*?</h\d+>\s*<ul>##ul##</ul>%ui', '', $this->descr );
+        $this->descr = preg_replace( '%<p>.*?[</strong>]*</p>\s*<ul>##ul##</ul>%ui', '', $this->descr );
+        $this->descr = preg_replace( '%<table.*?</table>%uis', '##table##', $this->descr );
+        $this->descr = preg_replace( [ '%<h\d+>.*?</h\d+>\s*##table##%ui', '%<p>\s*</p>%uis' ], '', $this->descr );
+        $this->descr = preg_replace( '%<h\d+>.*?</h\d+>\s*<div class="table-responsive">%uis', '', $this->descr );
+        $this->descr = trim( str_replace( '##table##', '', $this->descr ) );
     }
 
     public function isGroup(): bool
@@ -128,6 +159,11 @@ class Parser extends HtmlParser
         return $this->descr;
     }
 
+    public function getShortDescription(): array
+    {
+        return $this->shorts;
+    }
+
     public function getBrand(): ?string
     {
         return $this->brand ?? null;
@@ -182,6 +218,16 @@ class Parser extends HtmlParser
         return $this->dims[ 'z' ] ?? null;
     }
 
+    public function getDimX(): ?float
+    {
+        return $this->dims[ 'x' ] ?? null;
+    }
+
+    public function getDimY(): ?float
+    {
+        return $this->dims[ 'y' ] ?? null;
+    }
+
     public function getChildProducts( FeedItem $parent_fi ): array
     {
         $child = [];
@@ -212,13 +258,13 @@ class Parser extends HtmlParser
 
             $product_name = [];
             foreach ( $option_labels as $key => $value ) {
-                if ( !empty( $product_data[ $key ] ) ) {
+                if ( isset( $product_data[ $key ] ) ) {
                     $product_name[] = $value . ': ' . $product_data[ $key ];
                 }
             }
 
             $fi->setMpn( $product_data[ 'itemid' ] );
-            $fi->setProduct( implode(', ', $product_name) );
+            $fi->setProduct( implode( ', ', $product_name ) );
             $fi->setCostToUs( StringHelper::getMoney( $product_data[ 'onlinecustomerprice' ] ) );
             $fi->setListPrice( StringHelper::getMoney( $product_data[ 'pricelevel9' ] ) );
             $fi->setRAvail( $product_data[ 'isinstock' ] ? self::DEFAULT_AVAIL_NUMBER : 0 );
