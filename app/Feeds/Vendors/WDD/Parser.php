@@ -5,6 +5,7 @@ namespace App\Feeds\Vendors\WDD;
 use App\Feeds\Parser\HtmlParser;
 use App\Feeds\Utils\ParserCrawler;
 use App\Helpers\StringHelper;
+use Illuminate\Support\Facades\Storage;
 
 class Parser extends HtmlParser
 {
@@ -36,10 +37,26 @@ class Parser extends HtmlParser
         $this->descr = preg_replace( '%<p>\s*</p>%uis', '', $this->descr );
 
         // Dimensions
-        if ( preg_match( '%([\d\.]+)\s*"H x ([\d\.]+)\s*"W x ([\d\.]+)\s*"D%ui', $this->descr, $match ) ) {
-            $this->dims[ 'y' ] = (float) $match[ 1 ];
-            $this->dims[ 'x' ] = (float) $match[ 2 ];
-            $this->dims[ 'z' ] = (float) $match[ 3 ];
+        $temp = str_replace( '½', '1/2', $this->descr );
+        if ( preg_match( '%([\d\.\-\s/]+)[”"]+H\s*x\s*([\d\.\-\s/]+)[”"]+W\s*x\s*([\d\.\-\s/]+)[”"]+D%ui', $temp,
+            $match ) ) {
+
+            $match[ 1 ] = str_replace( '-', ' ', $match[ 1 ] );
+            $match[ 2 ] = str_replace( '-', ' ', $match[ 2 ] );
+            $match[ 3 ] = str_replace( '-', ' ', $match[ 3 ] );
+
+            if ( preg_match( '%([\d]+)\s+([\d]+)/([\d]+)%ui', $match[ 1 ], $frac ) ) {
+                $match[ 1 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
+            }
+            if ( preg_match( '%([\d]+)\s+([\d]+)/([\d]+)%ui', $match[ 2 ], $frac ) ) {
+                $match[ 2 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
+            }
+            if ( preg_match( '%([\d]+)\s+([\d]+)/([\d]+)%ui', $match[ 3 ], $frac ) ) {
+                $match[ 3 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
+            }
+            $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 1 ] );
+            $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 2 ] );
+            $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 3 ] );
         }
     }
 
