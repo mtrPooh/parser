@@ -134,14 +134,25 @@ class Parser extends HtmlParser
             if ( !$image ) {
                 $image = $c->getAttr( 'img', 'src' );
             }
+            $images[] = $image;
+        } );
+        if ( empty( $images ) ) {
+            $this->filter( 'div.woocommerce-product-gallery__image img' )->each( function ( ParserCrawler $c ) use ( &$images ) {
+                $image = $c->getAttr( 'img', 'data-large_image' );
+                if ( !$image ) {
+                    $image = $c->getAttr( 'img', 'src' );
+                }
+                $images[] = $image;
+            } );
+        }
+        foreach ( $images as $key => $image ) {
             $filename = pathinfo( $image );
             $filename = $filename[ 'basename' ];
             if ( str_contains( $filename, '?' ) ) {
                 $new_filename = substr( $filename, 0, strpos( $filename, '?' ) );
-                $image = str_replace( $filename, $new_filename, $image );
+                $images[ $key ] = str_replace( $filename, $new_filename, $images[ $key ] );
             }
-            $images[] = $image;
-        } );
+        }
 
         return array_values( array_unique( $images ) );
     }
