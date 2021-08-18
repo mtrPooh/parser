@@ -6,6 +6,7 @@ use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
 use App\Feeds\Utils\ParserCrawler;
 use App\Helpers\StringHelper;
+use Illuminate\Support\Facades\Storage;
 
 class Parser extends HtmlParser
 {
@@ -20,7 +21,12 @@ class Parser extends HtmlParser
     public function beforeParse(): void
     {
         $json = trim( $this->getText( 'script[type="application/ld+json"]' ) );
-        if ( !empty( $json ) && !empty( $json = json_decode( $json, true ) ) ) {
+        try {
+            $json = json_decode( $json, true, 512, JSON_THROW_ON_ERROR );
+        } catch ( \JsonException $e ) {
+        }
+
+        if ( is_array( $json ) ) {
             foreach ( $json as $key => $value ) {
                 if ( !empty( $value[ '@type' ] ) && $value[ '@type' ] === 'Product' ) {
                     $this->json = $value;
@@ -29,14 +35,17 @@ class Parser extends HtmlParser
             }
         }
 
-        if ( str_contains( $this->getHtml( 'body' ), 'This product may only be purchased over the phone' ) ) {
+        $body = $this->getHtml( 'body' );
+        if ( str_contains( $body, 'This product may only be purchased over the phone' )
+            || str_contains( $body, 'NO LONGER AVAILABLE' ) ) {
+
             $this->json[ 'offers' ][ 'price' ] = 0;
         }
 
+        // Dimensions, Weight, Attributes
         $this->filter( 'div#tab-description table' )->each( function ( ParserCrawler $c ) {
             $table = $c->getHtml( 'table' );
 
-            // Dimensions, Weight, Attributes
             if ( str_contains( $table, 'Product Measurements' ) ) {
 
                 $c->filter( 'tr' )->each( function ( ParserCrawler $c ) {
@@ -81,7 +90,7 @@ class Parser extends HtmlParser
                 } );
             }
 
-            // Short Description
+            // Short Description 1
             if ( str_contains( $table, 'Product Features' ) ) {
 
                 $this->filter( 'div#tab-description table' )->each( function ( ParserCrawler $c ) {
@@ -92,6 +101,52 @@ class Parser extends HtmlParser
                 } );
             }
         } );
+
+        // Short Description 2
+        $this->filter( 'div.product-short-description li' )->each( function ( ParserCrawler $c ) {
+            $this->shorts[] = trim( $c->getText( 'li' ), '  ' );
+        } );
+        $this->filter( 'div#tab-description li' )->each( function ( ParserCrawler $c ) {
+            $this->shorts[] = trim( $c->getText( 'li' ), '  ' );
+        } );
+
+        // Dimension, Weight from another table
+        $this->filter( '#tab-additional_information table.woocommerce-product-attributes tr' )
+            ->each( function ( ParserCrawler $c ) {
+
+                $name = trim( @$c->filter( 'th' )->getNode( 0 )->nodeValue, ' : ' );
+                $value = trim( @$c->filter( 'td' )->getNode( 0 )->nodeValue, '  ' );
+
+                if ( empty( $value ) ) {
+                    return;
+                }
+
+                $name = str_replace( ' ', ' ', $name );
+                $value = str_replace( ' ', ' ', $value );
+
+                if ( $name === 'Dimensions'
+                    && preg_match( '%([\d\.]+)\s*×\s*([\d\.]+)\s*×\s*([\d\.]+)\s*%ui', $value, $match ) ) {
+
+                    $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 1 ] );
+                    $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 2 ] );
+                    $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 3 ] );
+                }
+                elseif ( $name === 'Weight' ) {
+                    $this->weight = StringHelper::getFloat( $value );
+                }
+            } );
+
+        // Clean attributes
+        if ( !empty( $this->attrs ) ) {
+            $i = 0;
+            foreach ( $this->attrs as $key => $value ) {
+                if ( $key === 'HCPCS Code' && $i > 0 ) {
+                    $this->attrs = array_slice( $this->attrs, $i );
+                    break;
+                }
+                $i++;
+            }
+        }
     }
 
     public function isGroup(): bool
@@ -101,7 +156,18 @@ class Parser extends HtmlParser
 
     public function getMpn(): string
     {
-        return !empty( $this->json[ 'sku' ] ) ? trim( $this->json[ 'sku' ] ) : $this->getText( 'span.sku' );
+        $mpn = '';
+        $this->filter( '#tab-description p' )->each( function ( ParserCrawler $c ) use ( &$mpn ) {
+            $text = str_replace( ' ', '', $c->getText( 'p' ) );
+            if ( preg_match( '%Model:\s*(.*?)$%ui', $text, $match ) ) {
+                $mpn = trim( $match[ 1 ] );
+            }
+        } );
+        if ( !$mpn && !empty( $this->json[ 'sku' ] ) ) {
+            return $this->json[ 'sku' ];
+        }
+
+        return trim( $this->getText( 'span.sku' ) );
     }
 
     public function getProduct(): string
@@ -111,9 +177,15 @@ class Parser extends HtmlParser
 
     public function getCostToUs(): float
     {
-        return !empty( $this->json[ 'offers' ][ 'price' ] ) ?
-            StringHelper::getFloat( $this->json[ 'offers' ][ 'price' ] ) :
-            StringHelper::getFloat( $this->getText( 'span.amount' ) );
+        if ( isset( $this->json[ 'offers' ][ 'price' ] ) ) {
+            $price = $this->json[ 'offers' ][ 'price' ] > 0 ? StringHelper::getFloat( $this->json[ 'offers' ][ 'price' ] ) : 0;
+        }
+        else {
+            $price = StringHelper::getFloat( $this->getText( 'div.product-info p.price ins span.amount' ) ) ?: 0;
+
+        }
+
+        return $price;
     }
 
     public function getListPrice(): ?float
@@ -162,10 +234,9 @@ class Parser extends HtmlParser
         if ( !empty( $this->json[ 'offers' ][ 'availability' ] ) ) {
             return str_contains( $this->json[ 'offers' ][ 'availability' ], 'InStock' ) ? self::DEFAULT_AVAIL_NUMBER : 0;
         }
-        else {
-            return $this->getAttr( 'meta[property="og:availability"]', 'content' ) === 'instock' ?
-                self::DEFAULT_AVAIL_NUMBER : 0;
-        }
+
+        return $this->getAttr( 'meta[property="og:availability"]', 'content' ) === 'instock' ?
+            self::DEFAULT_AVAIL_NUMBER : 0;
     }
 
     public function getCategories(): array
@@ -187,6 +258,7 @@ class Parser extends HtmlParser
             $descr_sec = trim( $match[ 1 ] );
         }
         $descr .= "\r\n" . $descr_sec;
+
         $this->filter( 'ul' )->each( function ( ParserCrawler $c ) use ( &$descr ) {
             $descr = str_ireplace( $c->outerHtml(), '', $descr );
         } );
@@ -251,55 +323,41 @@ class Parser extends HtmlParser
         }
 
         $option_lists->each( function ( ParserCrawler $list ) use ( &$options ) {
-            $text = $list->getText( 'div.wc-pao-addon-container' );
             $label = $list->filter( 'h2' );
             if ( $label->count() === 0 ) {
                 return;
             }
             $name = trim( $label->text(), ' : ' );
 
-            // Options
-            if ( !str_contains( $name, '*' ) ) {
+            $data = [];
+            $list->filter( 'option' )->each( function ( ParserCrawler $option ) use ( &$options, &$data, $name ) {
+                $attr = $option->getAttr( 'option', 'value' );
+                $text = trim( $option->text(), '  ' );
 
-                if ( str_contains( $text, '$' ) ) {
+                if ( !$attr ) {
                     return;
                 }
 
-                $list->filter( 'option' )->each( function ( ParserCrawler $option ) use ( &$options, $name ) {
-                    $attr = $option->getAttr( 'option', 'value' );
-                    $text = trim( $option->text(), '  ' );
-                    if ( !$attr || str_contains( $text, '$' ) ) {
-                        return;
-                    }
+                // Options
+                if ( !str_contains( $text, '$' ) ) {
                     $options[ $name ][] = $text;
-                } );
-            }
-            // Child products
-            else {
-
-                $data = [];
-                $list->filter( 'option' )->each( function ( ParserCrawler $option ) use ( &$data ) {
-                    $attr = $option->getAttr( 'option', 'value' );
-                    $text = trim( $option->text(), '  ' );
-
-                    if ( !$attr ) {
-                        return;
-                    }
-                    if ( preg_match( '%\(.*?\$\s*([\d\.\,]+)%ui', $text, $match ) ) {
-                        $price = StringHelper::getFloat( $match[ 1 ] );
-                    }
-                    else {
-                        $price = 0;
-                    }
-                    $d[ 'sku' ] = $attr;
-                    $d[ 'name' ] = trim( preg_replace( '%\(.*?\)%ui', '', $text ), '  ' );
-                    $d[ 'price' ] = $price;
-                    $data[] = $d;
-                } );
-
-                if ( !empty( $data ) ) {
-                    $this->ch_prods[] = [ 'label' => trim( str_replace( '*', '', $name ) ), 'options' => $data ];
                 }
+
+                // Child Products
+                if ( preg_match( '%\(.*?\$\s*([\d\.\,]+)%ui', $text, $match ) ) {
+                    $price = StringHelper::getFloat( $match[ 1 ] );
+                }
+                else {
+                    $price = 0;
+                }
+                $d[ 'sku' ] = $attr;
+                $d[ 'name' ] = trim( preg_replace( '%\(.*?\)%ui', '', $text ), '  ' );
+                $d[ 'price' ] = $price;
+                $data[] = $d;
+            } );
+
+            if ( !empty( $data ) ) {
+                $this->ch_prods[] = [ 'label' => trim( str_replace( '*', '', $name ) ), 'options' => $data ];
             }
         } );
 
@@ -331,6 +389,21 @@ class Parser extends HtmlParser
     {
         $videos = [];
         $this->filter( 'a.product-video-popup' )->each( function ( ParserCrawler $c ) use ( &$videos ) {
+            $src = $c->getAttr( 'a', 'href' );
+            if ( !empty( $src ) ) {
+                $url_parts = parse_url( $src );
+                $domain = $url_parts[ 'host' ];
+                if ( str_contains( $domain, '.' ) ) {
+                    $domain = explode( '.', $domain );
+                    $domain = $domain[ count( $domain ) - 2 ];
+                }
+                $videos[] = [
+                    'name' => $this->getProduct(),
+                    'video' => $src,
+                    'provider' => $domain ];
+            }
+        } );
+        $this->filter( 'a[rel="wp-video-lightbox"]' )->each( function ( ParserCrawler $c ) use ( &$videos ) {
             $src = $c->getAttr( 'a', 'href' );
             if ( !empty( $src ) ) {
                 $url_parts = parse_url( $src );
