@@ -11,10 +11,12 @@ class Data
     private const DEFAULT_OUTPUT_ENCODING = 'UTF-8';
 
     private string $raw_data;
+    private int $status_code;
 
-    public function __construct( string $raw_data = '' )
+    public function __construct( string $raw_data = '', int $status_code = 200 )
     {
         $this->raw_data = $raw_data;
+        $this->status_code = $status_code;
     }
 
     /**
@@ -47,6 +49,16 @@ class Data
             PrintHelper::printfError( self::EF_JSON_DECODE, $e->getMessage() );
             return [];
         }
+    }
+
+    public function setStatusCode( int $status_code ): void
+    {
+        $this->status_code = $status_code;
+    }
+
+    public function getStatusCode(): int
+    {
+        return $this->status_code;
     }
 
     public function __toString()

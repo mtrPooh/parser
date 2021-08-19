@@ -3,18 +3,21 @@
 namespace App\Feeds\Utils;
 
 use App\Feeds\Downloader\HttpDownloader;
+use App\Helpers\HttpHelper;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Psr7\Response;
 
 class ProxyConnector
 {
-    private const MAX_CONNECT_LIMIT = 50;
-
-    public function connect( HttpDownloader $downloader, Link $link ): void
+    public function connect( HttpDownloader $downloader, Link $link, int $connection_limit = 50 ): void
     {
         $connect = 0;
         while ( true ) {
-            if ( $connect >= self::MAX_CONNECT_LIMIT ) {
+            if ( !$downloader->getStaticUserAgent() ) {
+                $downloader->setUserAgent( HttpHelper::getUserAgent() );
+            }
+
+            if ( $connect >= $connection_limit ) {
                 $downloader->setUseProxy( false );
                 $downloader->getClient()->setProxy( null );
                 break;
@@ -50,6 +53,16 @@ class ProxyConnector
         if ( $response ) {
             $connection = true;
             print PHP_EOL . "Use proxy: $proxy" . PHP_EOL;
+        }
+        elseif ( $response = $exception->getResponse() ) {
+            $status = $response->getStatusCode();
+            if ( in_array( $status, [ 200, 404 ], true ) ) {
+                $connection = true;
+                print PHP_EOL . "Use proxy: $proxy" . PHP_EOL;
+            }
+            else {
+                print PHP_EOL . 'Proxy response code: ' . $status . PHP_EOL;
+            }
         }
         $downloader->getClient()->setRequestTimeOut( $downloader->timeout_s );
         return $connection;

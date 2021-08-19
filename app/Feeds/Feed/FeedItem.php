@@ -208,11 +208,17 @@ class FeedItem
                     $children = array_reduce( $children, function ( $c, FeedItem $child ) use ( $parser ) {
                             if ( !isset( $c[ $child->getMpn() ] ) ) {
                                 $c[ $child->getMpn() ] = $child;
-                                $child->setGroupMask( $this->getProduct() );
+
+                                if ( is_null( $child->getGroupMask() ) ) {
+                                    $child->setGroupMask( $this->getProduct() );
+                                }
                                 $child->setMultOrderQuantity( $child->getMinAmount() > 1 ? 'Y' : 'N' );
                                 $child->setBrandName( $child->getBrandName() ?: $parser->getVendor()->getSupplierName() );
                                 $child->setProductCode( strtoupper( $parser->getVendor()->getPrefix() . $child->getMpn() ) );
-                                $child->setSupplierInternalId( $parser->getInternalId() );
+
+                                if ( empty( $child->getSupplierInternalId() ) ) {
+                                    $child->setSupplierInternalId( $parser->getInternalId() );
+                                }
                                 $child->setHashProduct();
                             }
 
@@ -295,7 +301,7 @@ class FeedItem
      */
     public function setProduct( string $product ): void
     {
-        $this->product = StringHelper::mb_ucwords( mb_strtolower( StringHelper::mb_trim( $product ) ) );
+        $this->product = StringHelper::mb_ucwords( mb_strtolower( StringHelper::mb_trim( FeedHelper::cleaning( $product, [], true ) ) ) );
     }
 
     /**
@@ -346,7 +352,7 @@ class FeedItem
      */
     public function setShortdescr( array $descr = [] ): void
     {
-        $descr = FeedHelper::normalizeShortDesc( $descr );
+        $descr = FeedHelper::cleanShortDescription( $descr );
         if ( $descr ) {
             $this->descr = '<ul><li>' . html_entity_decode( implode( '</li><li>', $descr ) ) . '</li></ul>';
         }
@@ -789,7 +795,15 @@ class FeedItem
      */
     public function setAttributes( ?array $getAttributes ): void
     {
-        $this->attributes = $getAttributes ? array_map( static fn( string $attribute ) => html_entity_decode( $attribute ), $getAttributes ) : $getAttributes;
+        $getAttributes = $getAttributes ? array_map( static fn( string $attribute ) => html_entity_decode( $attribute ), $getAttributes ) : $getAttributes;
+        if ( $getAttributes ) {
+            foreach ( $getAttributes as $key => $value ) {
+                $this->attributes[ StringHelper::mb_ucfirst( strtolower( str_replace( '_', ' ', $key ) ) ) ] = $value;
+            }
+        }
+        else {
+            $this->attributes = $getAttributes;
+        }
     }
 
     /**
@@ -865,80 +879,6 @@ class FeedItem
     public function getHashProduct(): string
     {
         return $this->hash_product;
-    }
-
-    /**
-     * Cuts tags from the description, leaving the allowed tags, clearing them of styles, etc.
-     *
-     * @param $fulldescr
-     * @param bool $flag
-     * @param array $tags
-     * @return null|string
-     */
-    public function cutTags( $fulldescr, $flag = true, array $tags = [] ): ?string
-    {
-        $mass = [
-            'span',
-            'p',
-            'br',
-            'ol',
-            'ul',
-            'li',
-            'table',
-            'thead',
-            'tbody',
-            'th',
-            'tr',
-            'td',
-        ];
-
-        $regexps = [
-            '/<script[^>]*?>.*?<\/script>/i',
-            '/<noscript[^>]*?>.*?<\/noscript>/i',
-            '/<style[^>]*?>.*?<\/style>/i',
-            '/<video[^>]*?>.*?<\/video>/i',
-            '/<a[^>]*?>.*?<\/a>/i',
-            '/<iframe[^>]*?>.*?<\/iframe>/i'
-        ];
-        foreach ( $regexps as $regexp ) {
-            if ( preg_match( $regexp, $fulldescr ) ) {
-                $fulldescr = preg_replace( $regexp, '', $fulldescr );
-            }
-        }
-
-        $fulldescr = StringHelper::mb_trim( $fulldescr );
-
-        if ( !$flag ) {
-            $mass = [];
-        }
-
-        if ( !empty( $tags ) && is_array( $tags ) ) {
-            foreach ( $tags as $tag ) {
-                $regexp = '/<(\D+)\s?[^>]*?>/';
-                if ( preg_match( $regexp, $tag, $matches ) ) {
-                    $mass[] = $matches[ 1 ];
-                } else {
-                    $mass[] = $tag;
-                }
-            }
-        }
-
-        $tags_string = '';
-        foreach ( $mass as $tag ) {
-            $tags_string .= "<$tag>";
-        }
-
-        $fulldescr = strip_tags( $fulldescr, $tags_string );
-
-        foreach ( $mass as $tag ) {
-
-            $regexp = "/(<$tag)([^>]*)(>)/i";
-
-            if ( preg_match( $regexp, $fulldescr ) ) {
-                $fulldescr = preg_replace( $regexp, '$1$3', $fulldescr );
-            }
-        }
-        return $fulldescr;
     }
 
     /**

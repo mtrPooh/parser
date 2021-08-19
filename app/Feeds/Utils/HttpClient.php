@@ -6,6 +6,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Cookie\CookieJar;
 use GuzzleHttp\Cookie\SetCookie;
 use GuzzleHttp\Promise\PromiseInterface;
+use GuzzleHttp\Psr7\Response;
 
 class HttpClient
 {
@@ -13,6 +14,10 @@ class HttpClient
      * @var Client Asynchronous http client
      */
     private Client $client;
+    /**
+     * @var Response Object that contains information about the last successful response of the server to an http request
+     */
+    private Response $response;
     /**
      * @var CookieJar Cookie object
      */
@@ -59,6 +64,22 @@ class HttpClient
     }
 
     /**
+     * @param Response $response Sets an object with information about the response to the last successful http request
+     */
+    public function setResponse( Response $response ): void
+    {
+        $this->response = $response;
+    }
+
+    /**
+     * @return Response Returns an object with information about the response to the last successful http request
+     */
+    public function getResponse(): Response
+    {
+        return $this->response;
+    }
+
+    /**
      * Sets the http request header
      * @param string $name Title name
      * @param string $value Header value
@@ -95,6 +116,34 @@ class HttpClient
     }
 
     /**
+     * Returns the value of the specified header from the response to the last successful http request
+     * @param string $name
+     * @return string
+     */
+    public function getResponseHeader( string $name ): string
+    {
+        $header = $this->getResponse()->getHeader( $name );
+        return $header ? array_shift( $header ) : '';
+    }
+
+    /**
+     * Deletes the title by its name
+     * @param string $name Title name
+     */
+    public function removeHeader( string $name ): void
+    {
+        unset( $this->headers[ $name ] );
+    }
+
+    /**
+     * Removes all headers
+     */
+    public function removeHeaders(): void
+    {
+        $this->headers = [];
+    }
+
+    /**
      * Sets a new cookie
      * @param string $name Cookie name
      * @param string $value Cookie value
@@ -108,7 +157,7 @@ class HttpClient
     /**
      * Returns the value of the specified cookie
      * @param string $name Cookie name
-     * @return string cookie value
+     * @return string Cookie value
      */
     public function getCookie( string $name ): string
     {
@@ -120,9 +169,22 @@ class HttpClient
     }
 
     /**
+     * Returns an array containing an associative array with information about all active cookies
+     * [
+     * 'Name' => Cookie name
+     * 'Value' => Cookie value
+     * 'Domain' => The domain for which the cookie was installed
+     * ]
+     */
+    public function getCookies(): array
+    {
+        return $this->cookie_jar->toArray();
+    }
+
+    /**
      * Deletes all cookies
      */
-    public function clearCookie(): void
+    public function removeCookies(): void
     {
         $this->cookie_jar->clear();
     }

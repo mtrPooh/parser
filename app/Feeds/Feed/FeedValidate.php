@@ -134,11 +134,11 @@ class FeedValidate
     {
         if ( $group ) {
             if ( $product_name === 'Dummy' ) {
-                $this->attachFailProduct( 'product_name', 'Invalid group product name' );
+                $this->attachFailProduct( 'product_name', 'Group product name is "Dummy"' );
             }
         }
         else if ( $product_name === "" || $product_name === 'Dummy' ) {
-            $this->attachFailProduct( 'product_name', 'Invalid product name' );
+            $this->attachFailProduct( 'product_name', 'Empty product name or product name is "Dummy"' );
         }
         elseif ( $currency = $this->findPriceInString( $product_name ) ) {
             $this->attachFailProduct( 'product_name', 'Product name contains ' . $currency );
@@ -193,17 +193,21 @@ class FeedValidate
 
     private function validateDescription( string $desc ): void
     {
-        $data = FeedHelper::getShortsAndAttributesInDesc( $desc );
+        $data = FeedHelper::getShortsAndAttributesInDescription( $desc );
         if ( !is_null( $data[ 'attributes' ] ) ) {
             $this->attachFailProduct( 'description', 'The product description contains a set of specifications' );
         }
 
-        if ( count( $data[ 'short_desc' ] ) ) {
+        if ( count( $data[ 'short_description' ] ) ) {
             $this->attachFailProduct( 'description', 'The product description contains a set of features' );
         }
 
         if ( $currency = $this->findPriceInString( $data[ 'description' ] ) ) {
             $this->attachFailProduct( 'description', 'The product description contains ' . $currency );
+        }
+
+        if ( $data[ 'description' ] === 'Dummy' ) {
+            $this->attachFailProduct( 'description', 'Product description is "Dummy"' );
         }
     }
 
@@ -232,6 +236,15 @@ class FeedValidate
         foreach ( $images as $image ) {
             if ( !str_contains( $image, 'http:/' ) && !str_contains( $image, 'https:/' ) ) {
                 $this->attachFailProduct( 'images', 'The image link address must contain the http or https protocol' );
+            }
+            elseif ( str_contains( $image, 'youtube' ) || str_contains( $image, 'vimeo' ) ) {
+                $this->attachFailProduct( 'images', 'The image link address points to the video file' );
+            }
+            elseif ( $image === 'http://' || $image === 'https://' ) {
+                $this->attachFailProduct( 'images', 'The image link address contain only http or https protocol' );
+            }
+            elseif ( str_contains( substr( $image, 5 ), 'http:/' ) || str_contains( substr( $image, 6 ), 'https:/' ) ) {
+                $this->attachFailProduct( 'images', 'The image link address contain many http or https protocols' );
             }
         }
     }
@@ -263,9 +276,6 @@ class FeedValidate
             }
             else {
                 foreach ( $attributes as $key => $value ) {
-                    if ( preg_match( '/(\d+\.\d+|\.\d+|\d+)/', $key, $match_key ) && $match_key[ 1 ] === trim( $key ) ) {
-                        $this->attachFailProduct( 'attributes', 'The attribute name has a numeric format' );
-                    }
                     if ( is_array( $value ) ) {
                         $this->attachFailProduct( 'attributes', 'The attribute value must not be an array' );
                     }
@@ -274,6 +284,9 @@ class FeedValidate
                     }
                     if ( $currency = $this->findPriceInString( $value ) ) {
                         $this->attachFailProduct( 'attributes', 'The attribute value contains ' . $currency );
+                    }
+                    if ( trim( $key ) === '' ) {
+                        $this->attachFailProduct( 'attributes', 'The length of the attribute key is zero' );
                     }
                     if ( trim( $value ) === '' || mb_strlen( $value, 'utf8' ) > 500 ) {
                         $this->attachFailProduct( 'attributes', 'The length of the attribute value is zero or exceeds 500 characters' );
