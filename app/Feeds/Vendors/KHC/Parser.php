@@ -6,7 +6,6 @@ use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
 use App\Feeds\Utils\ParserCrawler;
 use App\Helpers\StringHelper;
-use Illuminate\Support\Facades\Storage;
 
 class Parser extends HtmlParser
 {
@@ -14,6 +13,8 @@ class Parser extends HtmlParser
     private array $dims = [];
     private array $s_dims = [];
     private array $shorts = [];
+    private array $images = [];
+    private array $videos = [];
     private array $ch_prods = [];
     private ?array $attrs = null;
     private ?float $weight = null;
@@ -21,6 +22,9 @@ class Parser extends HtmlParser
     public function beforeParse(): void
     {
         $json = trim( $this->getText( 'script[type="application/ld+json"]' ) );
+        $json = preg_replace( '%\\\\*"\s+]%', '\\" ', $json );
+        $json = str_replace( '"":', '\\"":', $json );
+
         try {
             $json = json_decode( $json, true, 512, JSON_THROW_ON_ERROR );
         } catch ( \JsonException $e ) {
@@ -76,7 +80,7 @@ class Parser extends HtmlParser
                         $this->weight = StringHelper::getFloat( $value );
                     }
                     elseif ( $name === 'Shipping Dimensions' ) {
-                        if ( preg_match( '%([\d\.\s]+)[”"″\s]+L\s*x\s*([\d\.\s]+)[”"″\s]+H\s*x\s*([\d\.\s]+)[”"″\s]+W%ui',
+                        if ( preg_match( '%([\d\\\.\s]+)[”"″\s]+L\s*x\s*([\d\\\.\s]+)[”"″\s]+H\s*x\s*([\d\\\.\s]+)[”"″\s]+W%ui',
                             $value,
                             $match ) ) {
                             $this->s_dims[ 'z' ] = StringHelper::getFloat( $match[ 1 ] );
@@ -125,7 +129,7 @@ class Parser extends HtmlParser
                 $value = str_replace( ' ', ' ', $value );
 
                 if ( $name === 'Dimensions'
-                    && preg_match( '%([\d\.]+)\s*×\s*([\d\.]+)\s*×\s*([\d\.]+)\s*%ui', $value, $match ) ) {
+                    && preg_match( '%([\d\\\.]+)\s*×\s*([\d\\\.]+)\s*×\s*([\d\\\.]+)\s*%ui', $value, $match ) ) {
 
                     $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 1 ] );
                     $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 2 ] );
@@ -163,6 +167,7 @@ class Parser extends HtmlParser
                 $mpn = trim( $match[ 1 ] );
             }
         } );
+
         if ( !$mpn && !empty( $this->json[ 'sku' ] ) ) {
             return $this->json[ 'sku' ];
         }
@@ -200,33 +205,31 @@ class Parser extends HtmlParser
 
     public function getImages(): array
     {
-        $images = [];
-        $this->filter( 'div.product-thumbnails img' )->each( function ( ParserCrawler $c ) use ( &$images ) {
-            $image = $c->getAttr( 'img', 'data-lazy-src' );
-            if ( !$image ) {
-                $image = $c->getAttr( 'img', 'src' );
-            }
-            $images[] = $image;
-        } );
-        if ( empty( $images ) ) {
-            $this->filter( 'div.woocommerce-product-gallery__image img' )->each( function ( ParserCrawler $c ) use ( &$images ) {
-                $image = $c->getAttr( 'img', 'data-large_image' );
-                if ( !$image ) {
-                    $image = $c->getAttr( 'img', 'src' );
-                }
-                $images[] = $image;
-            } );
+        $this->parseImages( 'div.product-thumbnails img', 'data-lazy-src' );
+        if ( empty( $this->images ) ) {
+            $this->parseImages( 'div.woocommerce-product-gallery__image img', 'data-large_image' );
         }
-        foreach ( $images as $key => $image ) {
+        foreach ( $this->images as $key => $image ) {
             $filename = pathinfo( $image );
             $filename = $filename[ 'basename' ];
             if ( str_contains( $filename, '?' ) ) {
                 $new_filename = substr( $filename, 0, strpos( $filename, '?' ) );
-                $images[ $key ] = str_replace( $filename, $new_filename, $images[ $key ] );
+                $this->images[ $key ] = str_replace( $filename, $new_filename, $this->images[ $key ] );
             }
         }
 
-        return array_values( array_unique( $images ) );
+        return array_values( array_unique( $this->images ) );
+    }
+
+    private function parseImages( string $img_selector, string $attr_selector ): void
+    {
+        $this->filter( $img_selector )->each( function ( ParserCrawler $c ) use ( $attr_selector ) {
+            $image = $c->getAttr( 'img', $attr_selector );
+            if ( !$image ) {
+                $image = $c->getAttr( 'img', 'src' );
+            }
+            $this->images[] = $image;
+        } );
     }
 
     public function getAvail(): ?int
@@ -258,11 +261,7 @@ class Parser extends HtmlParser
             $descr_sec = trim( $match[ 1 ] );
         }
         $descr .= "\r\n" . $descr_sec;
-
-        $this->filter( 'ul' )->each( function ( ParserCrawler $c ) use ( &$descr ) {
-            $descr = str_ireplace( $c->outerHtml(), '', $descr );
-        } );
-        $descr = preg_replace( '%<p>\s*</p>%ui', '', $descr );
+        $descr = preg_replace( [ '%<ul.*?</ul>%uis', '%<h\d+.*?</h\d+>%uis', '%<p>\s*</p>%uis' ], '', $descr );
 
         return trim( $descr );
     }
@@ -339,12 +338,12 @@ class Parser extends HtmlParser
                 }
 
                 // Options
-                if ( !str_contains( $text, '$' ) ) {
+                if ( !str_contains( $name, '*' ) && !str_contains( $text, '$' ) ) {
                     $options[ $name ][] = $text;
                 }
 
                 // Child Products
-                if ( preg_match( '%\(.*?\$\s*([\d\.\,]+)%ui', $text, $match ) ) {
+                if ( preg_match( '%\(.*?\$\s*([\d\\\.,]+)%ui', $text, $match ) ) {
                     $price = StringHelper::getFloat( $match[ 1 ] );
                 }
                 else {
@@ -360,7 +359,7 @@ class Parser extends HtmlParser
                 $this->ch_prods[] = [ 'label' => trim( str_replace( '*', '', $name ) ), 'options' => $data ];
             }
         } );
-
+        
         return $options;
     }
 
@@ -387,39 +386,29 @@ class Parser extends HtmlParser
 
     public function getVideos(): array
     {
-        $videos = [];
-        $this->filter( 'a.product-video-popup' )->each( function ( ParserCrawler $c ) use ( &$videos ) {
-            $src = $c->getAttr( 'a', 'href' );
-            if ( !empty( $src ) ) {
-                $url_parts = parse_url( $src );
-                $domain = $url_parts[ 'host' ];
-                if ( str_contains( $domain, '.' ) ) {
-                    $domain = explode( '.', $domain );
-                    $domain = $domain[ count( $domain ) - 2 ];
-                }
-                $videos[] = [
-                    'name' => $this->getProduct(),
-                    'video' => $src,
-                    'provider' => $domain ];
-            }
-        } );
-        $this->filter( 'a[rel="wp-video-lightbox"]' )->each( function ( ParserCrawler $c ) use ( &$videos ) {
-            $src = $c->getAttr( 'a', 'href' );
-            if ( !empty( $src ) ) {
-                $url_parts = parse_url( $src );
-                $domain = $url_parts[ 'host' ];
-                if ( str_contains( $domain, '.' ) ) {
-                    $domain = explode( '.', $domain );
-                    $domain = $domain[ count( $domain ) - 2 ];
-                }
-                $videos[] = [
-                    'name' => $this->getProduct(),
-                    'video' => $src,
-                    'provider' => $domain ];
-            }
-        } );
+        $this->parseVideos( 'a.product-video-popup' );
+        $this->parseVideos( 'a[rel="wp-video-lightbox"]' );
 
-        return $videos;
+        return $this->videos;
+    }
+
+    private function parseVideos( string $selector ): void
+    {
+        $this->filter( $selector )->each( function ( ParserCrawler $c ) {
+            $src = $c->getAttr( 'a', 'href' );
+            if ( !empty( $src ) ) {
+                $url_parts = parse_url( $src );
+                $domain = $url_parts[ 'host' ];
+                if ( str_contains( $domain, '.' ) ) {
+                    $domain = explode( '.', $domain );
+                    $domain = $domain[ count( $domain ) - 2 ];
+                }
+                $this->videos[] = [
+                    'name' => $this->getProduct(),
+                    'video' => $src,
+                    'provider' => $domain ];
+            }
+        } );
     }
 
     public function getChildProducts( FeedItem $parent_fi ): array
