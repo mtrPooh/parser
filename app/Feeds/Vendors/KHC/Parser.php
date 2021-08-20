@@ -19,6 +19,7 @@ class Parser extends HtmlParser
     private array $ch_prods = [];
     private ?array $attrs = null;
     private ?float $weight = null;
+    private ?string $upc = null;
 
     private function parseImages( string $img_selector, string $attr_selector ): void
     {
@@ -190,6 +191,22 @@ class Parser extends HtmlParser
                 $i++;
             }
         }
+
+        // UPC
+        $upc_found = false;
+        $this->filter( '#tab-description tr' )->each( function ( ParserCrawler $c ) use ( &$upc_found ) {
+            if ( $c->filter( 'td' )->getNode( 0 ) === null || $c->filter( 'td' )->getNode( 1 ) === null ) {
+                return;
+            }
+            $value = trim( $c->filter( 'td' )->getNode( 1 )->nodeValue, '  ' );
+            if ( $value === 'UPC#' ) {
+                $upc_found = true;
+                return;
+            }
+            if ( $upc_found && !$this->getUpc() ) {
+                $this->upc = StringHelper::calculateUPC( $value ) ?? null;
+            }
+        } );
     }
 
     public function isGroup(): bool
@@ -206,12 +223,16 @@ class Parser extends HtmlParser
                 $mpn = trim( $match[ 1 ] );
             }
         } );
-
         if ( !$mpn && !empty( $this->json[ 'sku' ] ) ) {
             return $this->json[ 'sku' ];
         }
 
         return trim( $this->getText( 'span.sku' ) );
+    }
+
+    public function getUpc(): ?string
+    {
+        return $this->upc;
     }
 
     public function getProduct(): string
