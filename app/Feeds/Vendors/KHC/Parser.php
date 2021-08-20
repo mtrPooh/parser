@@ -150,8 +150,8 @@ class Parser extends HtmlParser
         $this->filter( '#tab-additional_information table.woocommerce-product-attributes tr' )
             ->each( function ( ParserCrawler $c ) {
 
-                $name = trim( @$c->filter( 'th' )->getNode( 0 )->nodeValue, ' : ' );
-                $value = trim( @$c->filter( 'td' )->getNode( 0 )->nodeValue, '  ' );
+                $name = trim( $c->filter( 'th' )->getNode( 0 )->nodeValue, ' : ' );
+                $value = trim( $c->filter( 'td' )->getNode( 0 )->nodeValue, '  ' );
 
                 if ( empty( $value ) ) {
                     return;
