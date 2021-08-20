@@ -282,8 +282,11 @@ class Parser extends HtmlParser
             $descr_sec = trim( $match[ 1 ] );
         }
         $descr .= "\r\n" . $descr_sec;
+        if ( strpos( $descr, '<div class="container section-title-container"' ) ) {
+            $descr = substr( $descr, 0, strpos( $descr, '<div class="container section-title-container"' ) );
+        }
         $descr = preg_replace( [ '%<ul.*?</ul>%uis', '%<h\d+.*?</h\d+>%uis', '%<p>\s*</p>%uis' ], '', $descr );
-
+        
         return trim( $descr );
     }
 
