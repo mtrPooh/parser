@@ -167,12 +167,12 @@ class Parser extends HtmlParser
                 $name = str_replace( ' ', ' ', $name );
                 $value = str_replace( ' ', ' ', $value );
 
-                if ( $name === 'Dimensions'
+                if ( $name === 'Dimensions' && empty( $this->dims )
                     && preg_match( '%([\d.]+)\s*×\s*([\d.]+)\s*×\s*([\d.]+)\s*%ui', $value, $match ) ) {
 
-                    $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 1 ] );
+                    $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 1 ] );
                     $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 2 ] );
-                    $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 3 ] );
+                    $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 3 ] );
                 }
                 elseif ( $name === 'Weight' ) {
                     $this->weight = StringHelper::getFloat( $value );
@@ -296,7 +296,7 @@ class Parser extends HtmlParser
             $descr = substr( $descr, 0, strpos( $descr, '<div class="badge-container' ) );
         }
         $descr = preg_replace( [ '%<ul.*?</ul>%uis', '%<h\d+.*?</h\d+>%uis', '%<p>\s*</p>%uis' ], '', $descr );
-        
+
         return trim( $descr );
     }
 
