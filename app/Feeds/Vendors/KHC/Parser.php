@@ -144,7 +144,7 @@ class Parser extends HtmlParser
                 } );
             }
         } );
-        
+
         // Short Description 2
         $this->filter( 'div.product-short-description li' )->each( function ( ParserCrawler $c ) {
             $this->shorts[] = trim( $c->getText( 'li' ), '  ' );
@@ -292,8 +292,11 @@ class Parser extends HtmlParser
         if ( strpos( $descr, '<div class="container section-title-container"' ) ) {
             $descr = substr( $descr, 0, strpos( $descr, '<div class="container section-title-container"' ) );
         }
+        if ( strpos( $descr, '<div class="badge-container' ) ) {
+            $descr = substr( $descr, 0, strpos( $descr, '<div class="badge-container' ) );
+        }
         $descr = preg_replace( [ '%<ul.*?</ul>%uis', '%<h\d+.*?</h\d+>%uis', '%<p>\s*</p>%uis' ], '', $descr );
-
+        
         return trim( $descr );
     }
 
