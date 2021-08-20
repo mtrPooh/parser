@@ -119,6 +119,13 @@ class Parser extends HtmlParser
                             $this->s_dims[ 'y' ] = StringHelper::getFloat( $match[ 2 ] );
                             $this->s_dims[ 'x' ] = StringHelper::getFloat( $match[ 3 ] );
                         }
+                        if ( empty( $this->s_dims ) && preg_match( '%([\d.\s]+)[”"″\s]+L\s*x\s*([\d.\s]+)[”"″\s]+W\s*x\s*([\d.\s]+)[”"″\s]+H%ui',
+                                $value,
+                                $match ) ) {
+                            $this->s_dims[ 'z' ] = StringHelper::getFloat( $match[ 1 ] );
+                            $this->s_dims[ 'x' ] = StringHelper::getFloat( $match[ 2 ] );
+                            $this->s_dims[ 'y' ] = StringHelper::getFloat( $match[ 3 ] );
+                        }
                     }
                     else {
                         $this->attrs[ $name ] = $value;
@@ -137,7 +144,7 @@ class Parser extends HtmlParser
                 } );
             }
         } );
-
+        
         // Short Description 2
         $this->filter( 'div.product-short-description li' )->each( function ( ParserCrawler $c ) {
             $this->shorts[] = trim( $c->getText( 'li' ), '  ' );
@@ -286,7 +293,7 @@ class Parser extends HtmlParser
             $descr = substr( $descr, 0, strpos( $descr, '<div class="container section-title-container"' ) );
         }
         $descr = preg_replace( [ '%<ul.*?</ul>%uis', '%<h\d+.*?</h\d+>%uis', '%<p>\s*</p>%uis' ], '', $descr );
-        
+
         return trim( $descr );
     }
 
