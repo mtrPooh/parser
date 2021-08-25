@@ -4,7 +4,6 @@ namespace App\Feeds\Vendors\IVR;
 
 use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
-use App\Feeds\Utils\Link;
 use App\Helpers\StringHelper;
 
 class Parser extends HtmlParser
@@ -22,14 +21,12 @@ class Parser extends HtmlParser
         $product_id = explode( '.html', $product_id[ 'basename' ] );
         $product_id = $product_id[ 0 ];
 
-        $link = new Link( self::PRODUCT_URL . $product_id . '/show' );
-        $this->json = $this->getVendor()->getDownloader()->fetch( [ $link ], true );
-        $this->json = json_decode( $this->json[ 0 ][ 'data' ], true, 512, JSON_THROW_ON_ERROR );
+        $data = $this->getVendor()->getDownloader()->get( self::PRODUCT_URL . $product_id . '/show' );
+        $this->json = json_decode( $data->getData(), true, 512, JSON_THROW_ON_ERROR );
         $this->json = $this->json[ 'result' ][ 'product' ];
 
-        $link = new Link( self::CATEGORY_URL . $this->json[ 'id' ] );
-        $json = $this->getVendor()->getDownloader()->fetch( [ $link ], true );
-        $json = json_decode( $json[ 0 ][ 'data' ], true, 512, JSON_THROW_ON_ERROR );
+        $data = $this->getVendor()->getDownloader()->get( self::CATEGORY_URL . $this->json[ 'id' ] );
+        $json = json_decode( $data->getData(), true, 512, JSON_THROW_ON_ERROR );
         $json = $json[ 'result' ];
         foreach ( $json as $cat ) {
             $this->categories[] = $cat[ 'name' ];
@@ -45,12 +42,12 @@ class Parser extends HtmlParser
 
     public function getMpn(): string
     {
-        return $this->json[ 'parentSku' ];
+        return $this->json[ 'parentSku' ] ?: '';
     }
 
     public function getProduct(): string
     {
-        return $this->json[ 'name' ];
+        return $this->json[ 'name' ] ?: '';
     }
 
     public function getCostToUs(): float
@@ -65,7 +62,7 @@ class Parser extends HtmlParser
 
     public function getListPrice(): ?float
     {
-        return $this->list_price;
+        return $this->list_price ?? null;
     }
 
     public function getImages(): array
@@ -74,8 +71,10 @@ class Parser extends HtmlParser
         if ( !empty( $this->json[ 'mainImage' ] ) ) {
             $images[] = self::IMAGE_URL . $this->json[ 'mainImage' ];
         }
-        foreach ( $this->json[ 'extraImages' ] as $image ) {
-            $images[] = self::IMAGE_URL . $image;
+        if ( !empty( $this->json[ 'extraImages' ] ) ) {
+            foreach ( $this->json[ 'extraImages' ] as $image ) {
+                $images[] = self::IMAGE_URL . $image;
+            }
         }
 
         return array_values( array_unique( $images ) );
@@ -149,12 +148,21 @@ class Parser extends HtmlParser
             if ( !empty( $variant[ 'image' ] ) ) {
                 $fi->setImages( [ self::IMAGE_URL . $variant[ 'image' ] ] );
             }
-            if ( !empty( $variant[ 'descriptionMaps' ][ 'top length' ] ) ) {
-                $fi->setDimZ( StringHelper::getFloat( $variant[ 'descriptionMaps' ][ 'top length' ] ) );
-            }
             if ( !empty( $variant[ 'description' ] ) ) {
                 $fi->setFulldescr( ucfirst( $variant[ 'description' ] ) );
             }
+
+            if ( !empty( $variant[ 'descriptionMaps' ][ 0 ] ) ) {
+                $attrs = $this->getAttributes();
+                foreach ( $variant[ 'descriptionMaps' ][ 0 ] as $key => $value ) {
+                    if ( $key === 'unit' ) {
+                        continue;
+                    }
+                    $attrs[ ucfirst( $key ) ] = $value;
+                }
+            }
+
+            $fi->setAttributes( $attrs );
 
             $child[] = $fi;
         }
