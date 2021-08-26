@@ -93,11 +93,11 @@ class Vendor extends HttpProcessor
     {
         if ( $fi->isGroup() ) {
             $fi->setChildProducts( array_values(
-                array_filter( $fi->getChildProducts(), static fn( FeedItem $item ) => !empty( $item->getMpn() ) && count( $item->getImages() ) && $item->getCostToUs() > 0 )
+                array_filter( $fi->getChildProducts(), static fn( FeedItem $item ) => !empty( $item->getMpn() ) && count( $item->getImages() ) && $item->getRAvail() && $item->getCostToUs() > 0 )
             ) );
             return count( $fi->getChildProducts() );
         }
 
-        return !empty( $fi->getMpn() ) && count( $fi->getImages() ) && $fi->getRAvail() !== null && $fi->getCostToUs() > 0;
+        return !empty( $fi->getMpn() ) && count( $fi->getImages() ) && $fi->getRAvail() && $fi->getCostToUs() > 0;
     }
 }

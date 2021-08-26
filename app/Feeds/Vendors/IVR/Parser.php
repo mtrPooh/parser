@@ -5,59 +5,60 @@ namespace App\Feeds\Vendors\IVR;
 use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
 use App\Helpers\StringHelper;
+use App\Feeds\Utils\Data;
 
 class Parser extends HtmlParser
 {
     private array $json = [];
     private array $categories = [];
     private ?float $list_price = null;
-    private const PRODUCT_URL = 'https://www.ivrose.com/v9/product/anon/';
     private const CATEGORY_URL = 'https://www.ivrose.com/productCategory/anon/get-product-categorys-by-product-id?productId=';
     private const IMAGE_URL = 'https://image.geeko.ltd/original/';
 
+    public function parseContent( $data, $params = [] ): array
+    {
+        preg_match( '%var productVO = ({.*})%ui', $data->getData(), $matches );
+        $this->json = json_decode( $matches[ 1 ], true, 512, JSON_THROW_ON_ERROR );
+        $data = new Data( preg_replace( '%<script.*?</script>%uis', '', $data->getData() ) );
+
+        return parent::parseContent( $data, $params );
+    }
+
     public function beforeParse(): void
     {
-        $product_id = pathinfo( $this->getInternalId() );
-        $product_id = explode( '.html', $product_id[ 'basename' ] );
-        $product_id = $product_id[ 0 ];
-
-        $data = $this->getVendor()->getDownloader()->get( self::PRODUCT_URL . $product_id . '/show' );
-        $this->json = json_decode( $data->getData(), true, 512, JSON_THROW_ON_ERROR );
-        $this->json = $this->json[ 'result' ][ 'product' ];
-
-        $data = $this->getVendor()->getDownloader()->get( self::CATEGORY_URL . $this->json[ 'id' ] );
+        $data = $this->getVendor()->getDownloader()->get( self::CATEGORY_URL . $this->json[ 'products' ][ 0 ][ 'id' ] );
         $json = json_decode( $data->getData(), true, 512, JSON_THROW_ON_ERROR );
         $json = $json[ 'result' ];
         foreach ( $json as $cat ) {
             $this->categories[] = $cat[ 'name' ];
         }
 
-        $this->list_price = $this->getMoney( $this->json[ 'usdPrice' ][ 'amount' ] );
+        $this->list_price = StringHelper::getMoney( $this->json[ 'products' ][ 0 ][ 'price' ][ 'amount' ] );
     }
 
     public function isGroup(): bool
     {
-        return !empty( $this->json[ 'variants' ] );
+        return !empty( $this->json[ 'products' ][ 0 ][ 'variants' ] );
     }
 
     public function getMpn(): string
     {
-        return $this->json[ 'parentSku' ] ?: '';
+        return $this->json[ 'products' ][ 0 ][ 'parentSku' ] ?: '';
     }
 
     public function getProduct(): string
     {
-        return $this->json[ 'name' ] ?: '';
+        return $this->json[ 'products' ][ 0 ][ 'name' ] ?: '';
     }
 
     public function getCostToUs(): float
     {
-        if ( empty( $this->json[ 'promotion' ][ 'promotionPrice' ][ 'amount' ] ) ) {
+        if ( empty( $this->json[ 'products' ][ 0 ][ 'promotion' ][ 'promotionPrice' ][ 'amount' ] ) ) {
             $this->list_price = null;
-            return $this->getMoney( $this->json[ 'usdPrice' ][ 'amount' ] );
+            return StringHelper::getFloat( $this->json[ 'products' ][ 0 ][ 'price' ][ 'amount' ] );
         }
 
-        return $this->getMoney( $this->json[ 'promotion' ][ 'promotionPrice' ][ 'amount' ] );
+        return StringHelper::getFloat( $this->json[ 'products' ][ 0 ][ 'promotion' ][ 'promotionPrice' ][ 'amount' ] );
     }
 
     public function getListPrice(): ?float
@@ -68,11 +69,11 @@ class Parser extends HtmlParser
     public function getImages(): array
     {
         $images = [];
-        if ( !empty( $this->json[ 'mainImage' ] ) ) {
-            $images[] = self::IMAGE_URL . $this->json[ 'mainImage' ];
+        if ( !empty( $this->json[ 'products' ][ 0 ][ 'mainImage' ] ) ) {
+            $images[] = self::IMAGE_URL . $this->json[ 'products' ][ 0 ][ 'mainImage' ];
         }
-        if ( !empty( $this->json[ 'extraImages' ] ) ) {
-            foreach ( $this->json[ 'extraImages' ] as $image ) {
+        if ( !empty( $this->json[ 'products' ][ 0 ][ 'extraImages' ] ) ) {
+            foreach ( $this->json[ 'products' ][ 0 ][ 'extraImages' ] as $image ) {
                 $images[] = self::IMAGE_URL . $image;
             }
         }
@@ -82,7 +83,7 @@ class Parser extends HtmlParser
 
     public function getAvail(): ?int
     {
-        return $this->json[ 'status' ] === '1' ? self::DEFAULT_AVAIL_NUMBER : 0;
+        return StringHelper::getFloat( $this->json[ 'products' ][ 0 ][ 'stocks' ] );
     }
 
     public function getCategories(): array
@@ -92,21 +93,21 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        return $this->json[ 'description' ];
+        return $this->json[ 'products' ][ 0 ][ 'description' ];
     }
 
     public function getAttributes(): ?array
     {
         $attrs = [];
 
-        preg_match_all( '%<tr(.*?)</tr>%uis', $this->json[ 'description2' ], $rows );
+        preg_match_all( '%<tr(.*?)</tr>%uis', $this->json[ 'products' ][ 0 ][ 'description2' ], $rows );
         if ( empty( $rows[ 1 ] ) ) {
             return null;
         }
 
         foreach ( $rows[ 1 ] as $row ) {
             preg_match( '%<td.*?>(.*?)</td>\s*<td.*?>(.*?)</td>%uis', $row, $cols );
-            $attrs[ trim( $cols[ 1 ] ) ] = trim( $cols[ 2 ] );
+            $attrs[ trim( $cols[ 1 ], ': ' ) ] = trim( $cols[ 2 ] );
         }
 
         return $attrs ?? null;
@@ -114,57 +115,74 @@ class Parser extends HtmlParser
 
     public function getBrand(): ?string
     {
-        return $this->json[ 'brand' ] ?? null;
+        return $this->json[ 'products' ][ 0 ][ 'brand' ] ?? null;
     }
 
     public function getChildProducts( FeedItem $parent_fi ): array
     {
         $child = [];
 
-        foreach ( $this->json[ 'variants' ] as $variant ) {
+        foreach ( $this->json[ 'products' ] as $product_data ) {
 
-            $fi = clone $parent_fi;
+            foreach ( $product_data[ 'variants' ] as $variant ) {
 
-            $product = [];
-            if ( !empty( $variant[ 'color' ] ) ) {
-                $product[] = 'Color: ' . $variant[ 'color' ];
-            }
-            if ( !empty( $variant[ 'size' ] ) ) {
-                $product[] = 'Size: ' . $variant[ 'size' ];
-            }
-            $product = implode( ', ', $product );
+                $fi = clone $parent_fi;
 
-            $fi->setMpn( $variant[ 'sku' ] );
-            $fi->setProduct( $product );
-            if ( !empty( $variant[ 'promotionPrice' ][ 'amount' ] ) ) {
-                $fi->setCostToUs( StringHelper::getMoney( $variant[ 'promotionPrice' ][ 'amount' ] ) );
-                $fi->setListPrice( StringHelper::getMoney( $variant[ 'price' ][ 'amount' ] ) );
-            }
-            else {
-                $fi->setCostToUs( StringHelper::getMoney( $variant[ 'price' ][ 'amount' ] ) );
-            }
-            $fi->setRAvail( $variant[ 'status' ] === '1' ? self::DEFAULT_AVAIL_NUMBER : 0 );
-
-            if ( !empty( $variant[ 'image' ] ) ) {
-                $fi->setImages( [ self::IMAGE_URL . $variant[ 'image' ] ] );
-            }
-            if ( !empty( $variant[ 'description' ] ) ) {
-                $fi->setFulldescr( ucfirst( $variant[ 'description' ] ) );
-            }
-
-            if ( !empty( $variant[ 'descriptionMaps' ][ 0 ] ) ) {
-                $attrs = $this->getAttributes();
-                foreach ( $variant[ 'descriptionMaps' ][ 0 ] as $key => $value ) {
-                    if ( $key === 'unit' ) {
-                        continue;
-                    }
-                    $attrs[ ucfirst( $key ) ] = $value;
+                $product = [];
+                if ( !empty( $variant[ 'color' ] ) ) {
+                    $product[] = 'Color: ' . $variant[ 'color' ];
                 }
+                if ( !empty( $variant[ 'size' ] ) ) {
+                    $product[] = 'Size: ' . $variant[ 'size' ];
+                }
+                $product = implode( ', ', $product );
+
+                $fi->setMpn( $variant[ 'sku' ] );
+                $fi->setProduct( $product );
+
+                if ( !empty( $variant[ 'promotionPrice' ][ 'amount' ] ) ) {
+                    $fi->setCostToUs( StringHelper::getMoney( $variant[ 'promotionPrice' ][ 'amount' ] ) );
+                    $fi->setListPrice( StringHelper::getMoney( $variant[ 'price' ][ 'amount' ] ) );
+                }
+                else {
+                    $fi->setCostToUs( StringHelper::getMoney( $variant[ 'price' ][ 'amount' ] ) );
+                }
+
+                if ( !empty( $variant[ 'weight' ] ) ) {
+                    $fi->setWeight( StringHelper::getFloat( $variant[ 'weight' ] ) );
+                }
+
+                $fi->setRAvail( StringHelper::getFloat( $variant[ 'stocks' ] ) ?: 0 );
+
+                $images = $this->getImages();
+                if ( !empty( $variant[ 'image' ] ) ) {
+                    $images[] = self::IMAGE_URL . $variant[ 'image' ];
+                }
+                $fi->setImages( array_values( array_unique( $images ) ) );
+
+                if ( !empty( $variant[ 'description' ] ) ) {
+                    $fi->setFulldescr( ucfirst( $variant[ 'description' ] ) . "\n" . $this->getDescription() );
+                }
+
+                $attrs = $this->getAttributes();
+                if ( !empty( $variant[ 'descriptions' ][ 0 ] ) ) {
+                    foreach ( $variant[ 'descriptions' ][ 0 ] as $key => $value ) {
+                        if ( $key === 'unit' || empty( $value ) ) {
+                            continue;
+                        }
+                        if ( $key === 'length' ) {
+                            $fi->setDimZ( StringHelper::getFloat( $value ) );
+                        }
+                        else {
+                            $attrs[ trim( $key, ': ' ) ] = $value;
+                        }
+                    }
+                }
+
+                $fi->setAttributes( $attrs );
+
+                $child[] = $fi;
             }
-
-            $fi->setAttributes( $attrs );
-
-            $child[] = $fi;
         }
 
         return $child;
