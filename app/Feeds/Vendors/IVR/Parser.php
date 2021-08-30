@@ -69,12 +69,15 @@ class Parser extends HtmlParser
     public function getImages(): array
     {
         $images = [];
-        if ( !empty( $this->json[ 'products' ][ 0 ][ 'mainImage' ] ) ) {
-            $images[] = self::IMAGE_URL . $this->json[ 'products' ][ 0 ][ 'mainImage' ];
-        }
-        if ( !empty( $this->json[ 'products' ][ 0 ][ 'extraImages' ] ) ) {
-            foreach ( $this->json[ 'products' ][ 0 ][ 'extraImages' ] as $image ) {
-                $images[] = self::IMAGE_URL . $image;
+
+        foreach ( $this->json[ 'products' ] as $product_data ) {
+            if ( !empty( $product_data[ 'mainImage' ] ) ) {
+                $images[] = self::IMAGE_URL . $product_data[ 'mainImage' ];
+            }
+            if ( !empty( $product_data[ 'extraImages' ] ) ) {
+                foreach ( $product_data[ 'extraImages' ] as $image ) {
+                    $images[] = self::IMAGE_URL . $image;
+                }
             }
         }
 
@@ -93,7 +96,7 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        return $this->json[ 'products' ][ 0 ][ 'description' ];
+        return preg_replace( '%<table.*?</table>\s*%uis', '', $this->json[ 'products' ][ 0 ][ 'description2' ] );
     }
 
     public function getAttributes(): ?array
@@ -123,6 +126,17 @@ class Parser extends HtmlParser
         $child = [];
 
         foreach ( $this->json[ 'products' ] as $product_data ) {
+
+            $images = [];
+            if ( !empty( $product_data[ 'mainImage' ] ) ) {
+                $images[] = self::IMAGE_URL . $product_data[ 'mainImage' ];
+            }
+            if ( !empty( $product_data[ 'extraImages' ] ) ) {
+                foreach ( $product_data[ 'extraImages' ] as $image ) {
+                    $images[] = self::IMAGE_URL . $image;
+                }
+            }
+            $images = array_values( array_unique( $images ) );
 
             foreach ( $product_data[ 'variants' ] as $variant ) {
 
@@ -154,11 +168,7 @@ class Parser extends HtmlParser
 
                 $fi->setRAvail( StringHelper::getFloat( $variant[ 'stocks' ] ) ?: 0 );
 
-                $images = $this->getImages();
-                if ( !empty( $variant[ 'image' ] ) ) {
-                    $images[] = self::IMAGE_URL . $variant[ 'image' ];
-                }
-                $fi->setImages( array_values( array_unique( $images ) ) );
+                $fi->setImages( $images );
 
                 if ( !empty( $variant[ 'description' ] ) ) {
                     $fi->setFulldescr( ucfirst( $variant[ 'description' ] ) . "\n" . $this->getDescription() );
