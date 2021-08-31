@@ -74,8 +74,8 @@ class Parser extends HtmlParser
             if ( !empty( $product_data[ 'mainImage' ] ) ) {
                 $images[] = self::IMAGE_URL . $product_data[ 'mainImage' ];
             }
-            if ( !empty( $product_data[ 'extraImages' ] ) ) {
-                foreach ( $product_data[ 'extraImages' ] as $image ) {
+            if ( !empty( $product_data[ 'pcExtraImages' ] ) ) {
+                foreach ( $product_data[ 'pcExtraImages' ] as $image ) {
                     $images[] = self::IMAGE_URL . $image;
                 }
             }
@@ -131,8 +131,8 @@ class Parser extends HtmlParser
             if ( !empty( $product_data[ 'mainImage' ] ) ) {
                 $images[] = self::IMAGE_URL . $product_data[ 'mainImage' ];
             }
-            if ( !empty( $product_data[ 'extraImages' ] ) ) {
-                foreach ( $product_data[ 'extraImages' ] as $image ) {
+            if ( !empty( $product_data[ 'pcExtraImages' ] ) ) {
+                foreach ( $product_data[ 'pcExtraImages' ] as $image ) {
                     $images[] = self::IMAGE_URL . $image;
                 }
             }
