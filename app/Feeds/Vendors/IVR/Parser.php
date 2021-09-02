@@ -19,15 +19,19 @@ class Parser extends HtmlParser
     public function parseContent( $data, $params = [] ): array
     {
         preg_match( '%var productVO = ({.*});%ui', $data->getData(), $matches );
+        if ( empty( $matches[ 1 ] ) ) {
+            return [];
+        }
+
         try {
             $this->json = json_decode( $matches[ 1 ], true, 512, JSON_THROW_ON_ERROR );
         } catch ( \JsonException $e ) {
-            die( "\nJson decode error in: " . $this->getInternalId() . "\n" );
+            die( "\nJson decode error in: " . $params[ 'url' ] . "\n" );
         }
 
         // TODO: remove if not need
         if ( empty( $this->json[ 'products' ] ) ) {
-            die( "\nJson products is empty in: " . $this->getInternalId() . "\n" );
+            die( "\nJson products is empty in: " . $params[ 'url' ] . "\n" );
         }
 
         $data = new Data( preg_replace( '%<script.*?</script>%uis', '', $data->getData() ) );
