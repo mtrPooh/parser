@@ -125,10 +125,15 @@ class Parser extends HtmlParser
 
         foreach ( $rows[ 1 ] as $row ) {
             preg_match( '%<td.*?>(.*?)</td>\s*<td.*?>(.*?)</td>%uis', $row, $cols );
-            $attrs[ trim( $cols[ 1 ], ': ' ) ] = trim( $cols[ 2 ] );
+            $cols[ 1 ] = trim( $cols[ 1 ], ': ' );
+            $cols[ 2 ] = trim( $cols[ 2 ] );
+            if ( empty( $cols[ 1 ] ) || empty( $cols[ 2 ] ) ) {
+                continue;
+            }
+            $attrs[ $cols[ 1 ] ] = $cols[ 2 ];
         }
 
-        return $attrs ?? null;
+        return !empty( $attrs ) ? $attrs : null;
     }
 
     public function getBrand(): ?string
@@ -192,6 +197,11 @@ class Parser extends HtmlParser
                 $attrs = $this->getAttributes();
                 if ( !empty( $variant[ 'descriptions' ][ 0 ] ) ) {
                     foreach ( $variant[ 'descriptions' ][ 0 ] as $key => $value ) {
+                        $key = trim( $key );
+                        $value = trim( $value );
+                        if ( empty( $key ) || empty( $value ) ) {
+                            continue;
+                        }
                         if ( $key === 'unit' || empty( $value ) ) {
                             continue;
                         }
@@ -204,7 +214,9 @@ class Parser extends HtmlParser
                     }
                 }
 
-                $fi->setAttributes( $attrs );
+                if ( !empty( $attrs ) ) {
+                    $fi->setAttributes( $attrs );
+                }
 
                 $child[] = $fi;
             }
