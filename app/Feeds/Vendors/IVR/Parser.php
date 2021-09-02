@@ -6,7 +6,6 @@ use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
 use App\Helpers\StringHelper;
 use App\Feeds\Utils\Data;
-use Illuminate\Support\Facades\Storage;
 
 class Parser extends HtmlParser
 {
@@ -44,14 +43,10 @@ class Parser extends HtmlParser
         $data = $this->getVendor()->getDownloader()->get( self::CATEGORY_URL . $this->json[ 'products' ][ 0 ][ 'id' ] );
         $json = json_decode( $data->getData(), true, 512, JSON_THROW_ON_ERROR );
 
-        // TODO: remove if not need
-        if ( empty( $this->json[ 'result' ] ) ) {
-            die( "\nCategoty json result is empty in: " . $this->getInternalId() . "\n" );
-        }
-
-        $json = $json[ 'result' ];
-        foreach ( $json as $cat ) {
-            $this->categories[] = $cat[ 'name' ];
+        if ( !empty( $this->json[ 'result' ] ) ) {
+            foreach ( $json[ 'result' ] as $cat ) {
+                $this->categories[] = $cat[ 'name' ];
+            }
         }
 
         $this->list_price = StringHelper::getMoney( $this->json[ 'products' ][ 0 ][ 'price' ][ 'amount' ] );
@@ -133,7 +128,7 @@ class Parser extends HtmlParser
             preg_match( '%<td.*?>(.*?)</td>\s*<td.*?>(.*?)</td>%uis', $row, $cols );
             $cols[ 1 ] = trim( $cols[ 1 ], ': ' );
             $cols[ 2 ] = trim( $cols[ 2 ] );
-            if ( strlen( $cols[ 1 ] ) === 0 || strlen( $cols[ 2 ] ) === 0 ) {
+            if ( empty( $cols[ 1 ] ) || empty( $cols[ 2 ] ) ) {
                 continue;
             }
             $attrs[ $cols[ 1 ] ] = $cols[ 2 ];
@@ -205,7 +200,7 @@ class Parser extends HtmlParser
                     foreach ( $variant[ 'descriptions' ][ 0 ] as $key => $value ) {
                         $key = trim( $key );
                         $value = trim( $value );
-                        if ( strlen( $key ) === 0 || strlen( $value ) === 0 || $key === 'unit' ) {
+                        if ( empty( $key ) || empty( $value ) || $key === 'unit' ) {
                             continue;
                         }
                         if ( $key === 'length' ) {
