@@ -21,11 +21,11 @@ class Parser extends HtmlParser
 
         // Child products
         $mpn = $this->getMpn();
-        preg_match_all( '%([\w]+)\s*\((.*?)\)%ui', $mpn, $match, PREG_SET_ORDER );
+        preg_match_all( '%(\w+)\s*\((.*?)\)%u', $mpn, $match, PREG_SET_ORDER );
 
         if ( !empty( $match ) ) {
             $i = 0;
-            foreach ( $match as $key => $value ) {
+            foreach ( $match as $value ) {
                 $this->childs[ $i ][ 'mpn' ] = $value[ 1 ];
                 $this->childs[ $i ][ 'color' ] = ucfirst( $value[ 2 ] );
                 if ( $value[ 1 ][ strlen( $value[ 1 ] ) - 1 ] !== $value[ 2 ][ 0 ] ) {
@@ -49,7 +49,7 @@ class Parser extends HtmlParser
         }
 
         // Dimensions
-        if ( preg_match( '%Dimensions:\s*</span>[<br/>\s]*([\d\s\-./]+)″L[×x\s]*([\d\s\-./]+)″W[×x\s]*([\d\s\-./]+)″H%uis',
+        if ( preg_match( '%Dimensions:\s*</span>[<br/>\s]*([\d\s\-./]+)″L[×x\s]*([\d\s\-./]+)″W[×x\s]*([\d\s\-./]+)″H%ui',
             $this->page,
             $match )
         ) {
@@ -57,13 +57,13 @@ class Parser extends HtmlParser
             $match[ 2 ] = str_replace( '-', ' ', $match[ 2 ] );
             $match[ 3 ] = str_replace( '-', ' ', $match[ 3 ] );
 
-            if ( preg_match( '%([\d]+)\s+([\d]+)/([\d]+)%ui', $match[ 1 ], $frac ) ) {
+            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 1 ], $frac ) ) {
                 $match[ 1 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
             }
-            if ( preg_match( '%([\d]+)\s+([\d]+)/([\d]+)%ui', $match[ 2 ], $frac ) ) {
+            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 2 ], $frac ) ) {
                 $match[ 2 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
             }
-            if ( preg_match( '%([\d]+)\s+([\d]+)/([\d]+)%ui', $match[ 3 ], $frac ) ) {
+            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 3 ], $frac ) ) {
                 $match[ 3 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
             }
 
@@ -73,7 +73,7 @@ class Parser extends HtmlParser
         }
 
         // Shipping Dimensions
-        if ( preg_match( '%Packaging Size:\s*</span>[<br/>\s]*([\d\s\-./]+)″L[×x\s]*([\d\s\-./]+)″W[×x\s]*([\d\s\-./]+)″H%uis',
+        if ( preg_match( '%Packaging Size:\s*</span>[<br/>\s]*([\d\s\-./]+)″L[×x\s]*([\d\s\-./]+)″W[×x\s]*([\d\s\-./]+)″H%ui',
             $this->page,
             $match )
         ) {
@@ -81,13 +81,13 @@ class Parser extends HtmlParser
             $match[ 2 ] = str_replace( '-', ' ', $match[ 2 ] );
             $match[ 3 ] = str_replace( '-', ' ', $match[ 3 ] );
 
-            if ( preg_match( '%([\d]+)\s+([\d]+)/([\d]+)%ui', $match[ 1 ], $frac ) ) {
+            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 1 ], $frac ) ) {
                 $match[ 1 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
             }
-            if ( preg_match( '%([\d]+)\s+([\d]+)/([\d]+)%ui', $match[ 2 ], $frac ) ) {
+            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 2 ], $frac ) ) {
                 $match[ 2 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
             }
-            if ( preg_match( '%([\d]+)\s+([\d]+)/([\d]+)%ui', $match[ 3 ], $frac ) ) {
+            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 3 ], $frac ) ) {
                 $match[ 3 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
             }
 
@@ -122,11 +122,6 @@ class Parser extends HtmlParser
         }
 
         return $title;
-    }
-
-    public function getCostToUs(): float
-    {
-        return 0;
     }
 
     public function getImages(): array
@@ -201,7 +196,7 @@ class Parser extends HtmlParser
     public function getWeight(): ?float
     {
         $weight = null;
-        if ( preg_match( '%Product Weight:\s*</span>[<br/>\s]*([\d.]+)\s*lbs%uis', $this->page, $match ) ) {
+        if ( preg_match( '%Product Weight:\s*</span>[<br/>\s]*([\d.]+)\s*lbs%ui', $this->page, $match ) ) {
             $weight = $match[ 1 ];
         }
 
@@ -211,7 +206,7 @@ class Parser extends HtmlParser
     public function getShippingWeight(): ?float
     {
         $weight = null;
-        if ( preg_match( '%Shipping Weight:\s*</span>[<br/>\s]*([\d.]+)\s*lbs%uis', $this->page, $match ) ) {
+        if ( preg_match( '%Shipping Weight:\s*</span>[<br/>\s]*([\d.]+)\s*lbs%ui', $this->page, $match ) ) {
             $weight = $match[ 1 ];
         }
 
