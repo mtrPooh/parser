@@ -154,6 +154,10 @@ class Parser extends HtmlParser
     public function getCategories(): array
     {
         $categories = $this->getContent( 'div.address a' );
+        if ( empty( $categories ) ) {
+            return [];
+        }
+
         array_shift( $categories );
         if ( $categories[ 0 ] === 'Products' ) {
             array_shift( $categories );
