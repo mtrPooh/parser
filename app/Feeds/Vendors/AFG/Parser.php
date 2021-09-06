@@ -2,6 +2,7 @@
 
 namespace App\Feeds\Vendors\AFG;
 
+use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
 use App\Feeds\Utils\ParserCrawler;
 use App\Helpers\StringHelper;
@@ -9,6 +10,7 @@ use App\Helpers\StringHelper;
 class Parser extends HtmlParser
 {
     private string $page = '';
+    private array $childs = [];
     private array $dims = [];
     private array $s_dims = [];
 
@@ -16,6 +18,32 @@ class Parser extends HtmlParser
     {
         $this->page = html_entity_decode( $this->node->html() );
         $this->page = str_replace( ' ', ' ', $this->page );
+
+        // Child products
+        $mpn = $this->getMpn();
+        preg_match_all( '%([\w]+)\s*\((.*?)\)%ui', $mpn, $match, PREG_SET_ORDER );
+
+        if ( !empty( $match ) ) {
+            $i = 0;
+            foreach ( $match as $key => $value ) {
+                $this->childs[ $i ][ 'mpn' ] = $value[ 1 ];
+                $this->childs[ $i ][ 'color' ] = $value[ 2 ];
+                $i++;
+            }
+        }
+        if ( empty( $this->childs ) && preg_match( '%Available[in\s]+[Colr]*[s]*[\s:]+(.*?)</p>%uis', $this->page, $match ) ) {
+            $match = str_replace( ' or ', ',', $match[ 1 ] );
+            $match = explode( ',', strip_tags( $match ) );
+            $i = 0;
+            foreach ( $match as $child ) {
+                $child = trim( $child, '  ' );
+                if ( !empty( $child ) ) {
+                    $this->childs[ $i ][ 'mpn' ] = $mpn . strtoupper( $child[ 0 ] );
+                    $this->childs[ $i ][ 'color' ] = $child;
+                    $i++;
+                }
+            }
+        }
 
         // Dimensions
         if ( preg_match( '%Dimensions:\s*</span>[<br/>\s]*([\d\s\-./]+)″L[×x\s]*([\d\s\-./]+)″W[×x\s]*([\d\s\-./]+)″H%uis',
@@ -75,6 +103,11 @@ class Parser extends HtmlParser
         }
 
         return $mpn;
+    }
+
+    public function isGroup(): bool
+    {
+        return count( $this->childs ) > 1;
     }
 
     public function getProduct(): string
@@ -178,23 +211,6 @@ class Parser extends HtmlParser
         return $weight;
     }
 
-    public function getOptions(): array
-    {
-        $options = [];
-        if ( preg_match( '%Available[in\s]+[Colr]*[s]*[\s:]+(.*?)</p>%uis', $this->page, $match ) ) {
-            $match = str_replace( ' or ', ',', $match[ 1 ] );
-            $match = explode( ',', strip_tags( $match ) );
-            foreach ( $match as $option ) {
-                $option = trim( $option, '  ' );
-                if ( !empty( $option ) ) {
-                    $options[ 'Available Color' ][] = $option;
-                }
-            }
-        }
-
-        return $options;
-    }
-
     public function getDimZ(): ?float
     {
         return $this->dims[ 'z' ] ?? null;
@@ -223,5 +239,33 @@ class Parser extends HtmlParser
     public function getShippingDimY(): ?float
     {
         return $this->s_dims[ 'y' ] ?? null;
+    }
+
+    public function getChildProducts( FeedItem $parent_fi ): array
+    {
+        $child = [];
+        $images = $this->getImages();
+
+        foreach ( $this->childs as $child_data ) {
+
+            $fi = clone $parent_fi;
+
+            $child_images = [];
+            foreach ( $images as $image ) {
+                if ( strpos( $image, $child_data[ 'color' ] ) !== false ) {
+                    $child_images[] = $image;
+                }
+            }
+
+            $fi->setMpn( $child_data[ 'mpn' ] );
+            $fi->setProduct( 'Color: ' . $child_data[ 'color' ] );
+            $fi->setImages( $child_images );
+            $fi->setRAvail( self::DEFAULT_AVAIL_NUMBER );
+            $fi->setCostToUs( 0 );
+
+            $child[] = $fi;
+        }
+
+        return $child;
     }
 }
