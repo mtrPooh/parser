@@ -259,7 +259,7 @@ class Parser extends HtmlParser
 
             $child_images = [];
             foreach ( $images as $image ) {
-                if ( strpos( $image, $child_data[ 'color' ] ) !== false ) {
+                if ( str_contains( $image, $child_data[ 'color' ] ) ) {
                     $child_images[] = $image;
                 }
             }
