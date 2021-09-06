@@ -27,12 +27,15 @@ class Parser extends HtmlParser
             $i = 0;
             foreach ( $match as $key => $value ) {
                 $this->childs[ $i ][ 'mpn' ] = $value[ 1 ];
-                $this->childs[ $i ][ 'color' ] = $value[ 2 ];
+                $this->childs[ $i ][ 'color' ] = ucfirst( $value[ 2 ] );
+                if ( $value[ 1 ][ strlen( $value[ 1 ] ) - 1 ] !== $value[ 2 ][ 0 ] ) {
+                    $this->childs[ $i ][ 'mpn' ] .= $value[ 2 ][ 0 ];
+                }
                 $i++;
             }
         }
         if ( empty( $this->childs ) && preg_match( '%Available[in\s]+[Colr]*[s]*[\s:]+(.*?)</p>%uis', $this->page, $match ) ) {
-            $match = str_replace( ' or ', ',', $match[ 1 ] );
+            $match = str_replace( [ ' or ', ' and ' ], ',', $match[ 1 ] );
             $match = explode( ',', strip_tags( $match ) );
             $i = 0;
             foreach ( $match as $child ) {
