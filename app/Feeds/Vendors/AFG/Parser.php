@@ -67,8 +67,8 @@ class Parser extends HtmlParser
                 $match[ 3 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
             }
 
-            $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 1 ] );
-            $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 2 ] );
+            $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 1 ] );
+            $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 2 ] );
             $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 3 ] );
         }
 
@@ -91,8 +91,8 @@ class Parser extends HtmlParser
                 $match[ 3 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
             }
 
-            $this->s_dims[ 'z' ] = StringHelper::getFloat( $match[ 1 ] );
-            $this->s_dims[ 'x' ] = StringHelper::getFloat( $match[ 2 ] );
+            $this->s_dims[ 'x' ] = StringHelper::getFloat( $match[ 1 ] );
+            $this->s_dims[ 'z' ] = StringHelper::getFloat( $match[ 2 ] );
             $this->s_dims[ 'y' ] = StringHelper::getFloat( $match[ 3 ] );
         }
     }
