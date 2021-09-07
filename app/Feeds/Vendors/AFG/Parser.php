@@ -53,23 +53,9 @@ class Parser extends HtmlParser
             $this->page,
             $match )
         ) {
-            $match[ 1 ] = str_replace( '-', ' ', $match[ 1 ] );
-            $match[ 2 ] = str_replace( '-', ' ', $match[ 2 ] );
-            $match[ 3 ] = str_replace( '-', ' ', $match[ 3 ] );
-
-            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 1 ], $frac ) ) {
-                $match[ 1 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
-            }
-            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 2 ], $frac ) ) {
-                $match[ 2 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
-            }
-            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 3 ], $frac ) ) {
-                $match[ 3 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
-            }
-
-            $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 1 ] );
-            $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 2 ] );
-            $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 3 ] );
+            $this->dims[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+            $this->dims[ 'z' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 2 ] ) );
+            $this->dims[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 3 ] ) );
         }
 
         // Shipping Dimensions
@@ -77,23 +63,9 @@ class Parser extends HtmlParser
             $this->page,
             $match )
         ) {
-            $match[ 1 ] = str_replace( '-', ' ', $match[ 1 ] );
-            $match[ 2 ] = str_replace( '-', ' ', $match[ 2 ] );
-            $match[ 3 ] = str_replace( '-', ' ', $match[ 3 ] );
-
-            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 1 ], $frac ) ) {
-                $match[ 1 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
-            }
-            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 2 ], $frac ) ) {
-                $match[ 2 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
-            }
-            if ( preg_match( '%(\d+)\s+(\d+)/(\d+)%u', $match[ 3 ], $frac ) ) {
-                $match[ 3 ] = $frac[ 1 ] + $frac[ 2 ] / $frac[ 3 ];
-            }
-
-            $this->s_dims[ 'x' ] = StringHelper::getFloat( $match[ 1 ] );
-            $this->s_dims[ 'z' ] = StringHelper::getFloat( $match[ 2 ] );
-            $this->s_dims[ 'y' ] = StringHelper::getFloat( $match[ 3 ] );
+            $this->s_dims[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+            $this->s_dims[ 'z' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 2 ] ) );
+            $this->s_dims[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 3 ] ) );
         }
     }
 
