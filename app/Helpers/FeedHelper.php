@@ -13,18 +13,15 @@ class FeedHelper
      */
     public static function cleanProductDescription( string $description ): string
     {
-        if ( !empty( $description ) ) {
+        if ( StringHelper::isNotEmpty( $description ) ) {
             $description = self::cleanProductData( $description );
             $description = StringHelper::cutTagsAttributes( $description );
-            $description = str_replace( [ '<br>', '<div>', '</div>' ], [ "\n", '<p>', '</p>' ], html_entity_decode( $description ) );
-            $crawler = new ParserCrawler( $description );
-            if ( $crawler->filter( 'body' )->count() ) {
-                /** Removes empty tags from the product description **/
-                $description = $crawler->filter( 'body' )->html();
-                $description = StringHelper::cutEmptyTags( StringHelper::cutTags( $description ) );
-            }
+            $description = str_replace( [ '<div>', '</div>' ], [ '<p>', '</p>' ], html_entity_decode( StringHelper::removeSpaces( $description ) ) );
+
+            /** Removes empty tags from the product description **/
+            $description = StringHelper::cutEmptyTags( StringHelper::cutTags( $description ) );
         }
-        return StringHelper::normalizeSpaceInString( $description );
+        return $description;
     }
 
     /**
@@ -177,7 +174,7 @@ class FeedHelper
             'attributes' => $attributes
         ];
 
-        $regex_pattern = '<(div|p|span|b|strong|h\d)>%s(\s+)?((<\/\w+>)+)?:?(\s+)?<\/(div|p|span|b|strong|h\d)>(\s+)?((<\/\w+>)+)?(\s+)?';
+        $regex_pattern = '<(div|p|span|b|strong|h\d|em)>%s(\s+)?((<\/\w+>)+)?:?(\s+)?<\/(div|p|span|b|strong|h\d|em)>(\s+)?((<\w+>)+)?((<\/\w+>)+)?((<\w+>)+)?(\s+)?';
 
         $keys = [
             'Dimension(s)?',
@@ -209,7 +206,10 @@ class FeedHelper
                         'attributes' => []
                     ];
                     if ( isset( $match[ 'delimiter' ] ) ) {
-                        $delimiter = $match[ 'delimiter' ];
+                        $delimiter = array_shift( $match[ 'delimiter' ] );
+                        if ( !str_starts_with( $delimiter, '<' ) ) {
+                            $delimiter = "<$delimiter>";
+                        }
                         $list_data = self::getShortsAndAttributesInList( str_replace( [ "<$delimiter>", "</$delimiter>" ], [ '<li>', '</li>' ], $content_list ) );
                     }
                     elseif ( str_contains( $content_list, '<li>' ) ) {
@@ -282,6 +282,8 @@ class FeedHelper
                 $dims[ 'x' ] = isset( $matches[ $x_index ] ) ? StringHelper::getFloat( $matches[ $x_index ] ) : null;
                 $dims[ 'y' ] = isset( $matches[ $y_index ] ) ? StringHelper::getFloat( $matches[ $y_index ] ) : null;
                 $dims[ 'z' ] = isset( $matches[ $z_index ] ) ? StringHelper::getFloat( $matches[ $z_index ] ) : null;
+
+                return $dims;
             }
         }
 

@@ -226,7 +226,8 @@ class FeedItem
                         } ) ?? [];
 
                     $this->setChildProducts( array_values( $children ) );
-                } else {
+                }
+                else {
                     $this->setIsGroup( false );
                     $this->setRAvail( $parser->getAvail() );
                     $this->setForsale( $parser->getForsale() );
@@ -371,7 +372,7 @@ class FeedItem
      */
     public function setFulldescr( string $fulldescr ): void
     {
-        $this->fulldescr = StringHelper::mb_trim( StringHelper::cutTags( html_entity_decode( $fulldescr ) ) );
+        $this->fulldescr = nl2br( FeedHelper::cleanProductDescription( $fulldescr ) );
     }
 
     /**
@@ -798,12 +799,10 @@ class FeedItem
         $getAttributes = $getAttributes ? array_map( static fn( string $attribute ) => html_entity_decode( $attribute ), $getAttributes ) : $getAttributes;
         if ( $getAttributes ) {
             foreach ( $getAttributes as $key => $value ) {
-                $this->attributes[ StringHelper::mb_ucfirst( strtolower( str_replace( '_', ' ', $key ) ) ) ] = $value;
+                $attributes[ StringHelper::mb_ucfirst( strtolower( str_replace( '_', ' ', $key ) ) ) ] = $value;
             }
         }
-        else {
-            $this->attributes = $getAttributes;
-        }
+        $this->attributes = $attributes ?? $getAttributes;
     }
 
     /**

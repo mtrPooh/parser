@@ -271,8 +271,8 @@ class StringHelper
      */
     public static function cutEmptyTags( string $string ): string
     {
-        $string = preg_replace( '/<\w+>(\s+)?<\/\w+>/', '', $string );
-        if ( preg_match( '/<\w+>(\s+)?<\/\w+>/', $string ) ) {
+        $string = preg_replace( '/<[^<br>]>(\s+)?((<br>(\s+)?)+)?(\s+)?<\/\w+>/i', '', self::normalizeSpaceInString( $string ) );
+        if ( preg_match( '/<[^<br>]>(\s+)?((<br>(\s+)?)+)?(\s+)?<\/\w+>/', $string ) ) {
             $string = self::cutEmptyTags( $string );
         }
         return $string;
@@ -421,7 +421,7 @@ class StringHelper
     public static function getMoney( string $price ): float
     {
         $price = str_replace( ',', '', $price );
-        preg_match( '/\d+\.?(\d?)+/', $price, $matches );
+        preg_match( '/(\d+)?(\.?\d+(\.?\d+)?)/', $price, $matches );
         return (float)( $matches[ 0 ] ?? 0.0 );
     }
 
@@ -438,12 +438,24 @@ class StringHelper
         return '';
     }
 
-    public static function getFloat( string $string, ?float $default = null ): ?float
+    public static function getFloat( ?string $string, ?float $default = null ): ?float
     {
-        if ( preg_match( '/\d+\.\d+|\.\d+|\d+/', str_replace( ',', '', $string ), $match_float ) ) {
-            return self::normalizeFloat( (float)$match_float[ 0 ], $default );
+        $replacements = [
+            '¼' => '1/4',
+            '½' => '1/2',
+            '¾' => '3/4',
+        ];
+
+        $string = str_replace( array_keys( $replacements ), array_values( $replacements ), $string );
+        $string = trim( $string );
+        if ( preg_match( '/(\d+\s)?(\.?\d+(\.?\/?\d+)?)/', str_replace( ',', '', $string ), $match_float ) ) {
+            if ( str_contains( $match_float[ 2 ], '/' ) ) {
+                [ $divisible, $divisor ] = explode( '/', $match_float[ 2 ] );
+                $match_float[ 2 ] = $divisible / $divisor;
+            }
+            return self::normalizeFloat( isset( $match_float[ 1 ] ) ? (float)$match_float[ 1 ] + (float)$match_float[ 2 ] : (float)$match_float[ 2 ], $default );
         }
-        return null;
+        return $default;
     }
 
     public static function normalizeFloat( ?float $float, ?float $default = null ): ?float
