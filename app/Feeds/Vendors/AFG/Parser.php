@@ -14,6 +14,15 @@ class Parser extends HtmlParser
     private array $dims = [];
     private array $s_dims = [];
 
+    private function getFloat( array $match ): array
+    {
+        $result[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+        $result[ 'z' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 2 ] ) );
+        $result[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 3 ] ) );
+
+        return $result;
+    }
+
     public function beforeParse(): void
     {
         $this->page = html_entity_decode( $this->node->html() );
@@ -53,9 +62,7 @@ class Parser extends HtmlParser
             $this->page,
             $match )
         ) {
-            $this->dims[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
-            $this->dims[ 'z' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 2 ] ) );
-            $this->dims[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 3 ] ) );
+            $this->dims = $this->getFloat( $match );
         }
 
         // Shipping Dimensions
@@ -63,9 +70,7 @@ class Parser extends HtmlParser
             $this->page,
             $match )
         ) {
-            $this->s_dims[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
-            $this->s_dims[ 'z' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 2 ] ) );
-            $this->s_dims[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 3 ] ) );
+            $this->s_dims = $this->getFloat( $match );
         }
     }
 
