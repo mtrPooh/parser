@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\Storage;
 class Parser extends HtmlParser
 {
     private array $json = [];
-    private array $attrs = [];
+    private ?array $attrs = null;
+    private array $dims = [];
 
     private function parseImages( Data $data ): array
     {
@@ -67,20 +68,23 @@ class Parser extends HtmlParser
             $name = trim( strip_tags( $attr[ 0 ] ), ' : ' );
             $name = StringHelper::normalizeSpaceInString( $name );
 
-            if ( $name === 'Brand' ) {
-                return;
-            }
-
             $value = trim( strip_tags( $attr[ 1 ] ), '  ' );
             $value = StringHelper::normalizeSpaceInString( $value );
 
-            $this->attrs[ $name ] = $value;
-        } );
-        $this->filter( 'div.long-description tr' )->each( function ( ParserCrawler $c ) {
-            $name = trim( $c->filter( 'td' )->getNode( 0 )->nodeValue, ' : ' );
+            if ( $name === 'Brand' ) {
+                return;
+            }
+            if ( $name === 'Size' && str_contains( $value, '"' ) ) {
+                preg_match_all( '%([\d.\-/]+)"%', $value, $match );
+                $this->dims[ 'z' ] = !empty( $match[ 1 ][ 0 ] )
+                    ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) ) : null;
+                $this->dims[ 'x' ] = !empty( $match[ 1 ][ 1 ] )
+                    ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) ) : null;
+                $this->dims[ 'y' ] = !empty( $match[ 1 ][ 2 ] )
+                    ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) ) : null;
 
-            $value = trim( $c->filter( 'td' )->getNode( 1 )->nodeValue, '  ' );
-            $value .= ' ' . trim( $c->filter( 'td' )->getNode( 2 )->nodeValue, '  ' );
+                return;
+            }
 
             $this->attrs[ $name ] = $value;
         } );
@@ -108,17 +112,6 @@ class Parser extends HtmlParser
         return !empty( $this->json[ 'offers' ][ 0 ][ 'price' ] )
             ? $this->json[ 'offers' ][ 0 ][ 'price' ]
             : $this->json[ 'offers' ][ 'price' ];
-    }
-
-    public function getListPrice(): ?float
-    {
-        $list_price = $this->getText( 'p.price s' );
-        if ( str_contains( $list_price, 'to' ) ) {
-            $list_price = explode( 'to', $list_price );
-            return StringHelper::getFloat( $list_price[ 1 ] );
-        }
-
-        return StringHelper::getFloat( $list_price );
     }
 
     public function getImages(): array
@@ -158,25 +151,13 @@ class Parser extends HtmlParser
         $description = $this->getHtml( 'div.long-description' );
         $search = [
             '%<h(\d+)>.*?</h\1>\s*<ul.*?</ul>%uis',
-            '%<h(\d+)>.*?</h\1>\s*<table.*?</table>%uis',
             '%<b>.*?</b>\s*<ul.*?</ul>%uis',
-            '%<b>.*?</b>\s*<table.*?</table>%uis',
             '%<ul.*?</ul>%uis',
-            '%<table.*?</table>%uis'
         ];
         $description = preg_replace( $search, '', $description );
+        $description = preg_replace( '%</h(\d+)>%uis', "</h$1><br>", $description );
 
         return trim( $description );
-    }
-
-    public function getShortDescription(): array
-    {
-        $short_description = [];
-        $this->filter( 'div.long-description li' )->each( function ( ParserCrawler $c ) use ( &$short_description ) {
-            $short_description[] = trim( $c->filter( 'li' )->getNode( 0 )->nodeValue, ' : ' );
-        } );
-
-        return $short_description;
     }
 
     public function getAttributes(): ?array
@@ -187,6 +168,21 @@ class Parser extends HtmlParser
     public function getBrand(): string
     {
         return !empty( $this->json[ 'brand' ][ 'name' ] ) ? $this->json[ 'brand' ][ 'name' ] : '';
+    }
+
+    public function getDimZ(): ?float
+    {
+        return $this->dims[ 'z' ] ?? null;
+    }
+
+    public function getDimX(): ?float
+    {
+        return $this->dims[ 'x' ] ?? null;
+    }
+
+    public function getDimY(): ?float
+    {
+        return $this->dims[ 'y' ] ?? null;
     }
 
     public function getChildProducts( FeedItem $parent_fi ): array

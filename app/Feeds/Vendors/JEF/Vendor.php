@@ -3,15 +3,29 @@
 namespace App\Feeds\Vendors\JEF;
 
 use App\Feeds\Feed\FeedItem;
-use App\Feeds\Processor\HttpProcessor;
+use App\Feeds\Processor\SitemapHttpProcessor;
+use App\Feeds\Utils\Data;
 use App\Feeds\Utils\Link;
 
-class Vendor extends HttpProcessor
+class Vendor extends SitemapHttpProcessor
 {
-    public const CATEGORY_LINK_CSS_SELECTORS = [ 'li.menu-item li a', 'ul.wl-pagination li a' ];
-    public const PRODUCT_LINK_CSS_SELECTORS = [ 'li.product-grid-cell p.name a' ];
+    protected array $first = [ 'https://www.jefferspet.com/sitemap.xml.gz' ];
 
-    protected array $first = [ 'https://www.jefferspet.com/' ];
+    public function getProductsLinks( Data $data, string $url ): array
+    {
+        $sitemap = '';
+        $fp = gzopen( $url, "r" );
+        while ( !gzeof( $fp ) ) {
+            $sitemap .= gzread( $fp, 4096 );
+        }
+        gzclose( $fp );
+
+        if ( preg_match_all( '/<loc>([^<]*)<\/loc>/m', $sitemap, $matches ) ) {
+            $links = array_map( static fn( $url ) => new Link( htmlspecialchars_decode( $url ) ), $matches[ 1 ] );
+        }
+
+        return array_values( array_filter( $links ?? [], [ $this, 'filterProductLinks' ] ) );
+    }
 
     public function filterProductLinks( Link $link ): bool
     {
