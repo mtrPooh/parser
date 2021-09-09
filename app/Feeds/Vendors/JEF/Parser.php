@@ -7,13 +7,13 @@ use App\Feeds\Parser\HtmlParser;
 use App\Feeds\Utils\Data;
 use App\Feeds\Utils\ParserCrawler;
 use App\Helpers\StringHelper;
-use Illuminate\Support\Facades\Storage;
 
 class Parser extends HtmlParser
 {
     private array $json = [];
     private ?array $attrs = null;
     private array $dims = [];
+    private string $description = '';
 
     private function parseImages( Data $data ): array
     {
@@ -22,10 +22,6 @@ class Parser extends HtmlParser
         preg_match_all( '%<li class="alternate-image.*?href="(.*?)"%uis', $page, $match );
         if ( empty( $match[ 1 ] ) ) {
             preg_match( '%<script type="application/ld\+json">\s*(.*?)\s*</script>%ui', $page, $json );
-            if ( empty( $json[ 1 ] ) ) {
-                Storage::put( 'page.html', $page );
-                die( $this->getInternalId() );
-            }
             $json = json_decode( $json[ 1 ], true, 512, JSON_THROW_ON_ERROR );
             $images[] = $json[ 'image' ];
         }
@@ -55,6 +51,8 @@ class Parser extends HtmlParser
         $json = trim( $this->getText( 'script[type="application/ld+json"]' ) );
         $this->json = json_decode( $json, true, 512, JSON_THROW_ON_ERROR );
 
+        $this->description = $this->getHtml( 'div.long-description' );
+
         // Attributes
         if ( !empty( $this->json[ 'offers' ][ 'size' ] ) ) {
             $this->attrs[ 'Size' ] = $this->json[ 'offers' ][ 'size' ];
@@ -74,13 +72,13 @@ class Parser extends HtmlParser
             if ( $name === 'Brand' ) {
                 return;
             }
-            if ( $name === 'Size' && str_contains( $value, '"' ) ) {
+            if ( ( $name === 'Size' || $name === 'Dimensions' ) && str_contains( $value, '"' ) ) {
                 preg_match_all( '%([\d.\-/]+)"%', $value, $match );
                 $this->dims[ 'x' ] = !empty( $match[ 1 ][ 0 ] )
                     ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) ) : null;
-                $this->dims[ 'y' ] = !empty( $match[ 1 ][ 1 ] )
+                $this->dims[ 'z' ] = !empty( $match[ 1 ][ 1 ] )
                     ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) ) : null;
-                $this->dims[ 'z' ] = !empty( $match[ 1 ][ 2 ] )
+                $this->dims[ 'y' ] = !empty( $match[ 1 ][ 2 ] )
                     ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) ) : null;
 
                 return;
@@ -88,6 +86,18 @@ class Parser extends HtmlParser
 
             $this->attrs[ $name ] = $value;
         } );
+
+        if ( empty( $this->dims[ 'x' ] ) && preg_match( '%Measures:\s*([\d.\-/]+)"[\w\s]*x\s*([\d.\-/]+)"[\w\s]*x\s*([\d.\-/]+)"%ui',
+                $this->description,
+                $match ) ) {
+
+            $this->dims[ 'x' ] = !empty( $match[ 1 ] )
+                ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) ) : null;
+            $this->dims[ 'z' ] = !empty( $match[ 2 ] )
+                ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 2 ] ) ) : null;
+            $this->dims[ 'y' ] = !empty( $match[ 3 ] )
+                ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 3 ] ) ) : null;
+        }
     }
 
     public function isGroup(): bool
@@ -109,9 +119,9 @@ class Parser extends HtmlParser
 
     public function getCostToUs(): float
     {
-        return !empty( $this->json[ 'offers' ][ 0 ][ 'price' ] )
+        return StringHelper::getMoney( !empty( $this->json[ 'offers' ][ 0 ][ 'price' ] )
             ? $this->json[ 'offers' ][ 0 ][ 'price' ]
-            : $this->json[ 'offers' ][ 'price' ];
+            : $this->json[ 'offers' ][ 'price' ] ?? 0.0 );
     }
 
     public function getImages(): array
@@ -148,8 +158,13 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        $description = $this->getHtml( 'div.long-description' );
-        $description = preg_replace( '%</h(\d+)>%uis', "</h$1><br>", $description );
+        $description = preg_replace( '%</h(\d+)>%uis', "</h$1><br>", $this->description );
+        $this->filter( 'div.long-description p' )->each( function ( ParserCrawler $c ) use ( &$description ) {
+            $p = $c->outerHtml();
+            if ( str_contains( $p, '$' ) || str_contains( $p, 'Dimensions:' ) || str_contains( $p, 'Size:' ) || str_contains( $p, 'Measures:' ) ) {
+                $description = str_replace( $p, '', $description );
+            }
+        } );
 
         return trim( $description );
     }
@@ -162,6 +177,27 @@ class Parser extends HtmlParser
     public function getBrand(): string
     {
         return !empty( $this->json[ 'brand' ][ 'name' ] ) ? $this->json[ 'brand' ][ 'name' ] : '';
+    }
+
+    public function getVideos(): array
+    {
+        $videos = [];
+        $this->filter( 'div.long-description iframe' )->each( function ( ParserCrawler $c ) use ( &$videos ) {
+            $src = $c->getAttr( 'iframe', 'src' );
+            if ( !empty( $src ) ) {
+                $url_parts = parse_url( $src );
+                $domain = $url_parts[ 'host' ];
+                if ( str_contains( $domain, '.' ) ) {
+                    $domain = explode( '.', $domain );
+                    $domain = $domain[ count( $domain ) - 2 ];
+                }
+                $videos[] = [ 'name' => $this->getProduct(),
+                    'video' => $src,
+                    'provider' => $domain ];
+            }
+        } );
+
+        return $videos;
     }
 
     public function getDimZ(): ?float
