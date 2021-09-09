@@ -76,11 +76,11 @@ class Parser extends HtmlParser
             }
             if ( $name === 'Size' && str_contains( $value, '"' ) ) {
                 preg_match_all( '%([\d.\-/]+)"%', $value, $match );
-                $this->dims[ 'z' ] = !empty( $match[ 1 ][ 0 ] )
+                $this->dims[ 'x' ] = !empty( $match[ 1 ][ 0 ] )
                     ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) ) : null;
-                $this->dims[ 'x' ] = !empty( $match[ 1 ][ 1 ] )
+                $this->dims[ 'y' ] = !empty( $match[ 1 ][ 1 ] )
                     ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) ) : null;
-                $this->dims[ 'y' ] = !empty( $match[ 1 ][ 2 ] )
+                $this->dims[ 'z' ] = !empty( $match[ 1 ][ 2 ] )
                     ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) ) : null;
 
                 return;
@@ -149,12 +149,6 @@ class Parser extends HtmlParser
     public function getDescription(): string
     {
         $description = $this->getHtml( 'div.long-description' );
-        $search = [
-            '%<h(\d+)>.*?</h\1>\s*<ul.*?</ul>%uis',
-            '%<b>.*?</b>\s*<ul.*?</ul>%uis',
-            '%<ul.*?</ul>%uis',
-        ];
-        $description = preg_replace( $search, '', $description );
         $description = preg_replace( '%</h(\d+)>%uis', "</h$1><br>", $description );
 
         return trim( $description );
