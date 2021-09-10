@@ -11,8 +11,6 @@ class Vendor extends SitemapHttpProcessor
 {
     protected array $first = [ 'https://www.jefferspet.com/sitemap.xml.gz' ];
 
-    public array $custom_products = [ 'https://www.jefferspet.com/products/no-chew-petflex-2' ];
-
     public function getProductsLinks( Data $data, string $url ): array
     {
         $sitemap = '';
