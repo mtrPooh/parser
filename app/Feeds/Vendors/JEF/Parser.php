@@ -74,7 +74,7 @@ class Parser extends HtmlParser
                 return;
             }
             if ( ( $name === 'Size' || $name === 'Dimensions' ) && str_contains( $value, '"' ) ) {
-                preg_match_all( '%([\d.\-/]+)"%', $value, $match );
+                preg_match_all( '%([\d.\-/]+)[" ]+%', $value, $match );
                 if ( !empty( $match[ 1 ][ 0 ] ) ) {
                     $this->dims[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) );
                 }
@@ -219,6 +219,9 @@ class Parser extends HtmlParser
         $this->filter( 'div.long-description iframe' )->each( function ( ParserCrawler $c ) use ( &$videos ) {
             $src = $c->getAttr( 'iframe', 'src' );
             if ( !empty( $src ) ) {
+                if ( str_contains( $src, 'http' ) === false ) {
+                    $src = 'https://' . ltrim( $src, '/' );
+                }
                 $url_parts = parse_url( $src );
                 $domain = $url_parts[ 'host' ];
                 if ( str_contains( $domain, '.' ) ) {
