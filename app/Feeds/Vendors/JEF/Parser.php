@@ -60,6 +60,7 @@ class Parser extends HtmlParser
         if ( !empty( $this->json[ 'offers' ][ 'color' ] ) ) {
             $this->attrs[ 'Color' ] = $this->json[ 'offers' ][ 'color' ];
         }
+
         $this->filter( 'ul.attributes li' )->each( function ( ParserCrawler $c ) {
             $attr = explode( '</strong>', $c->filter( 'li' )->html() );
 
@@ -74,12 +75,39 @@ class Parser extends HtmlParser
             }
             if ( ( $name === 'Size' || $name === 'Dimensions' ) && str_contains( $value, '"' ) ) {
                 preg_match_all( '%([\d.\-/]+)"%', $value, $match );
-                $this->dims[ 'x' ] = !empty( $match[ 1 ][ 0 ] )
-                    ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) ) : null;
-                $this->dims[ 'z' ] = !empty( $match[ 1 ][ 1 ] )
-                    ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) ) : null;
-                $this->dims[ 'y' ] = !empty( $match[ 1 ][ 2 ] )
-                    ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) ) : null;
+                if ( !empty( $match[ 1 ][ 0 ] ) ) {
+                    $this->dims[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) );
+                }
+                if ( !empty( $match[ 1 ][ 1 ] ) ) {
+                    $this->dims[ 'z' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) );
+                }
+                if ( !empty( $match[ 1 ][ 2 ] ) ) {
+                    $this->dims[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) );
+                }
+
+                return;
+            }
+            if ( $name === 'Length' && preg_match( '%([\d.\-/]+)%', $value, $match ) ) {
+                if ( str_contains( $value, "'" ) ) {
+                    $match[ 1 ] *= 12;
+                }
+                $this->dims[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+
+                return;
+            }
+            if ( $name === 'Width' && preg_match( '%([\d.\-/]+)%', $value, $match ) ) {
+                if ( str_contains( $value, "'" ) ) {
+                    $match[ 1 ] *= 12;
+                }
+                $this->dims[ 'z' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+
+                return;
+            }
+            if ( $name === 'Height' && preg_match( '%([\d.\-/]+)%', $value, $match ) ) {
+                if ( str_contains( $value, "'" ) ) {
+                    $match[ 1 ] *= 12;
+                }
+                $this->dims[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
 
                 return;
             }
@@ -87,16 +115,22 @@ class Parser extends HtmlParser
             $this->attrs[ $name ] = $value;
         } );
 
-        if ( empty( $this->dims[ 'x' ] ) && preg_match( '%Measures:\s*([\d.\-/]+)"[\w\s]*x\s*([\d.\-/]+)"[\w\s]*x\s*([\d.\-/]+)"%ui',
-                $this->description,
-                $match ) ) {
-
-            $this->dims[ 'x' ] = !empty( $match[ 1 ] )
-                ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) ) : null;
-            $this->dims[ 'z' ] = !empty( $match[ 2 ] )
-                ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 2 ] ) ) : null;
-            $this->dims[ 'y' ] = !empty( $match[ 3 ] )
-                ? StringHelper::getFloat( str_replace( '-', ' ', $match[ 3 ] ) ) : null;
+        if ( preg_match( '%(Measures|Dimensions):(.*?)</p>%uis', $this->description, $match ) ) {
+            preg_match_all( '%([\d.\-/]+)"%', $match[ 2 ], $dims );
+            if ( count( $dims[ 1 ] ) > count( $this->dims ) ) {
+                if ( empty( $this->dims[ 'x' ] ) ) {
+                    $this->dims[ 'x' ] = !empty( $dims[ 1 ][ 0 ] )
+                        ? StringHelper::getFloat( str_replace( '-', ' ', $dims[ 1 ][ 0 ] ) ) : null;
+                }
+                if ( empty( $this->dims[ 'z' ] ) ) {
+                    $this->dims[ 'z' ] = !empty( $dims[ 1 ][ 1 ] )
+                        ? StringHelper::getFloat( str_replace( '-', ' ', $dims[ 1 ][ 1 ] ) ) : null;
+                }
+                if ( empty( $this->dims[ 'y' ] ) ) {
+                    $this->dims[ 'y' ] = !empty( $dims[ 1 ][ 2 ] )
+                        ? StringHelper::getFloat( str_replace( '-', ' ', $dims[ 1 ][ 2 ] ) ) : null;
+                }
+            }
         }
     }
 
