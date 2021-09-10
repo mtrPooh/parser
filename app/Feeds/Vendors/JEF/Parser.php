@@ -74,18 +74,36 @@ class Parser extends HtmlParser
                 return;
             }
             if ( ( $name === 'Size' || $name === 'Dimensions' ) ) {
-                preg_match_all( '%([\d.\-/"yards ]+)%', $value, $match );
-                if ( !empty( $match[ 1 ][ 0 ] ) ) {
-                    $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) );
-                    $this->dims[ 'x' ] = str_contains( $match[ 1 ][ 0 ], 'yards' ) ? $value * 36 : $value;
+
+                preg_match_all( '%([\d.\-/¼½¾"yards ]+)%u', $value, $match );
+
+                if ( str_contains( $value, 'L' ) || str_contains( $value, 'W' ) || str_contains( $value, 'H' ) ) {
+                    if ( !empty( $match[ 1 ][ 0 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) );
+                        $this->dims[ 'x' ] = str_contains( $match[ 1 ][ 0 ], 'yards' ) ? $value * 36 : $value;
+                    }
+                    if ( !empty( $match[ 1 ][ 1 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) );
+                        $this->dims[ 'z' ] = str_contains( $match[ 1 ][ 1 ], 'yards' ) ? $value * 36 : $value;
+                    }
+                    if ( !empty( $match[ 1 ][ 2 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) );
+                        $this->dims[ 'x' ] = str_contains( $match[ 1 ][ 2 ], 'yards' ) ? $value * 36 : $value;
+                    }
                 }
-                if ( !empty( $match[ 1 ][ 1 ] ) ) {
-                    $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) );
-                    $this->dims[ 'z' ] = str_contains( $match[ 1 ][ 1 ], 'yards' ) ? $value * 36 : $value;
-                }
-                if ( !empty( $match[ 1 ][ 2 ] ) ) {
-                    $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) );
-                    $this->dims[ 'x' ] = str_contains( $match[ 1 ][ 2 ], 'yards' ) ? $value * 36 : $value;
+                else {
+                    if ( !empty( $match[ 1 ][ 0 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) );
+                        $this->dims[ 'x' ] = str_contains( $match[ 1 ][ 0 ], 'yards' ) ? $value * 36 : $value;
+                    }
+                    if ( !empty( $match[ 1 ][ 1 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) );
+                        $this->dims[ 'y' ] = str_contains( $match[ 1 ][ 1 ], 'yards' ) ? $value * 36 : $value;
+                    }
+                    if ( !empty( $match[ 1 ][ 2 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) );
+                        $this->dims[ 'z' ] = str_contains( $match[ 1 ][ 2 ], 'yards' ) ? $value * 36 : $value;
+                    }
                 }
 
                 return;
