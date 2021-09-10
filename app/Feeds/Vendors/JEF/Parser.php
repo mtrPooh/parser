@@ -73,16 +73,19 @@ class Parser extends HtmlParser
             if ( $name === 'Brand' ) {
                 return;
             }
-            if ( ( $name === 'Size' || $name === 'Dimensions' ) && str_contains( $value, '"' ) ) {
-                preg_match_all( '%([\d.\-/]+)[" ]+%', $value, $match );
+            if ( ( $name === 'Size' || $name === 'Dimensions' ) ) {
+                preg_match_all( '%([\d.\-/"yards ]+)%', $value, $match );
                 if ( !empty( $match[ 1 ][ 0 ] ) ) {
-                    $this->dims[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) );
+                    $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) );
+                    $this->dims[ 'x' ] = str_contains( $match[ 1 ][ 0 ], 'yards' ) ? $value * 36 : $value;
                 }
                 if ( !empty( $match[ 1 ][ 1 ] ) ) {
-                    $this->dims[ 'z' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) );
+                    $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) );
+                    $this->dims[ 'z' ] = str_contains( $match[ 1 ][ 1 ], 'yards' ) ? $value * 36 : $value;
                 }
                 if ( !empty( $match[ 1 ][ 2 ] ) ) {
-                    $this->dims[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) );
+                    $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) );
+                    $this->dims[ 'x' ] = str_contains( $match[ 1 ][ 2 ], 'yards' ) ? $value * 36 : $value;
                 }
 
                 return;
