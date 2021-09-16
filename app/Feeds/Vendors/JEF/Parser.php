@@ -145,16 +145,30 @@ class Parser extends HtmlParser
 
         if ( preg_match( '%(Measures|Dimensions):\s*[</b>]*(.*?)(</p>|<br>)%uis', $this->description, $match ) ) {
 
-            preg_match_all( '%([\d.\-/¼½¾"yards ]+)%ui', $match[ 2 ], $sizes );
+            preg_match_all( '%([\d.\-/¼½¾"yardsLWH ]+)%ui', $match[ 2 ], $sizes );
 
             $dims = [];
             foreach ( $sizes[ 1 ] as $size ) {
-                if ( !empty( trim( $size ) ) ) {
+                if ( !empty( trim( $size ) ) && preg_match( '%\d+%', $size ) ) {
                     $dims[] = $size;
                 }
             }
 
             if ( count( $dims ) > count( $this->dims ) ) {
+                foreach ( $dims as $dim ) {
+                    if ( str_contains( $dim, 'W' ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
+                        $this->dims[ 'x' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
+                    }
+                    elseif ( str_contains( $dim, 'L' ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
+                        $this->dims[ 'y' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
+                    }
+                    else {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
+                        $this->dims[ 'z' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
+                    }
+                }
                 if ( empty( $this->dims[ 'x' ] ) && !empty( $dims[ 0 ] ) ) {
                     $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 0 ] ) );
                     $this->dims[ 'x' ] = str_contains( $dims[ 0 ], 'yards' ) ? $value * 36 : $value;
@@ -307,7 +321,7 @@ class Parser extends HtmlParser
         $description = preg_replace( '%<h\d+.*?</h\d+#del#%', '', $description );
         $description = str_replace( '#del#', '', $description );
         $description = preg_replace( '%<p>Benefits:</p>\s*<ul.*?</ul>%uis', '', $description );
-
+        
         return trim( $description );
     }
 
@@ -416,7 +430,9 @@ class Parser extends HtmlParser
             }
 
             $product = isset( $offer[ 'size' ] ) ? 'Size: ' . $offer[ 'size' ] : '';
-            $product = isset( $offer[ 'color' ] ) ? $product . ', Color: ' . $offer[ 'color' ] : $product;
+            if ( isset( $offer[ 'color' ] ) ) {
+                $product = !empty( $product ) ? $product . ', Color: ' . $offer[ 'color' ] : 'Color: ' . $offer[ 'color' ];
+            }
 
             $mpn = $offer[ 'sku' ];
 
