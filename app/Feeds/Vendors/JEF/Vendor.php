@@ -11,6 +11,9 @@ class Vendor extends SitemapHttpProcessor
 {
     protected array $first = [ 'https://www.jefferspet.com/sitemap.xml.gz' ];
 
+    protected const CHUNK_SIZE = 2;
+    protected const DELAY_S = 0.6;
+
     public function getProductsLinks( Data $data, string $url ): array
     {
         $sitemap = '';

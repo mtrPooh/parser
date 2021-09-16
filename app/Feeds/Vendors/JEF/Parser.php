@@ -4,7 +4,6 @@ namespace App\Feeds\Vendors\JEF;
 
 use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
-use App\Feeds\Utils\Data;
 use App\Feeds\Utils\ParserCrawler;
 use App\Helpers\StringHelper;
 
@@ -15,15 +14,11 @@ class Parser extends HtmlParser
     private array $dims = [];
     private string $description = '';
 
-    private function parseImages( Data $data ): array
+    private function parseImages( string $data ): array
     {
-        $page = $data->getData();
-
-        preg_match_all( '%<li class="alternate-image.*?href="(.*?)"%uis', $page, $match );
+        preg_match_all( '%<li class="alternate-image.*?href="(.*?)"%uis', $data, $match );
         if ( empty( $match[ 1 ] ) ) {
-            preg_match( '%<script type="application/ld\+json">\s*(.*?)\s*</script>%ui', $page, $json );
-            $json = json_decode( $json[ 1 ], true, 512, JSON_THROW_ON_ERROR );
-            $images[] = $json[ 'image' ];
+            $images[] = $this->json[ 'image' ];
         }
         else {
             $images = $match[ 1 ];
@@ -49,6 +44,10 @@ class Parser extends HtmlParser
     public function beforeParse(): void
     {
         $json = trim( $this->getText( 'script[type="application/ld+json"]' ) );
+        if ( !$json ) {
+            return;
+        }
+
         $this->json = json_decode( $json, true, 512, JSON_THROW_ON_ERROR );
 
         $this->description = $this->getHtml( 'div.long-description' );
@@ -73,36 +72,44 @@ class Parser extends HtmlParser
             if ( $name === 'Brand' ) {
                 return;
             }
-            if ( ( $name === 'Size' || $name === 'Dimensions' ) ) {
+            if ( ( $name === 'Size' || $name === 'Dimensions' ) && str_contains( $value, ',' ) === false
+                && str_contains( $value, 'ount' ) === false && str_contains( $value, 'uart' ) === false ) {
 
-                preg_match_all( '%([\d.\-/¼½¾"yards ]+)%u', $value, $match );
+                preg_match_all( '%([\d.\-/¼½¾"yards ]+)%ui', $value, $match );
+
+                $dims = [];
+                foreach ( $match[ 1 ] as $size ) {
+                    if ( !empty( trim( $size ) ) ) {
+                        $dims[] = $size;
+                    }
+                }
 
                 if ( str_contains( $value, 'L' ) || str_contains( $value, 'W' ) || str_contains( $value, 'H' ) ) {
-                    if ( !empty( $match[ 1 ][ 0 ] ) ) {
-                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) );
-                        $this->dims[ 'x' ] = str_contains( $match[ 1 ][ 0 ], 'yards' ) ? $value * 36 : $value;
+                    if ( !empty( $dims[ 0 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 0 ] ) );
+                        $this->dims[ 'x' ] = str_contains( $dims[ 0 ], 'yards' ) ? $value * 36 : $value;
                     }
-                    if ( !empty( $match[ 1 ][ 1 ] ) ) {
-                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) );
-                        $this->dims[ 'z' ] = str_contains( $match[ 1 ][ 1 ], 'yards' ) ? $value * 36 : $value;
+                    if ( !empty( $dims[ 1 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 1 ] ) );
+                        $this->dims[ 'z' ] = str_contains( $dims[ 1 ], 'yards' ) ? $value * 36 : $value;
                     }
-                    if ( !empty( $match[ 1 ][ 2 ] ) ) {
-                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) );
-                        $this->dims[ 'x' ] = str_contains( $match[ 1 ][ 2 ], 'yards' ) ? $value * 36 : $value;
+                    if ( !empty( $dims[ 2 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 2 ] ) );
+                        $this->dims[ 'x' ] = str_contains( $dims[ 2 ], 'yards' ) ? $value * 36 : $value;
                     }
                 }
                 else {
-                    if ( !empty( $match[ 1 ][ 0 ] ) ) {
-                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 0 ] ) );
+                    if ( !empty( $dims[ 0 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 0 ] ) );
                         $this->dims[ 'x' ] = str_contains( $match[ 1 ][ 0 ], 'yards' ) ? $value * 36 : $value;
                     }
-                    if ( !empty( $match[ 1 ][ 1 ] ) ) {
-                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 1 ] ) );
-                        $this->dims[ 'y' ] = str_contains( $match[ 1 ][ 1 ], 'yards' ) ? $value * 36 : $value;
+                    if ( !empty( $dims[ 1 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 1 ] ) );
+                        $this->dims[ 'y' ] = str_contains( $dims[ 1 ], 'yards' ) ? $value * 36 : $value;
                     }
-                    if ( !empty( $match[ 1 ][ 2 ] ) ) {
-                        $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) );
-                        $this->dims[ 'z' ] = str_contains( $match[ 1 ][ 2 ], 'yards' ) ? $value * 36 : $value;
+                    if ( !empty( $dims[ 2 ] ) ) {
+                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 2 ] ) );
+                        $this->dims[ 'z' ] = str_contains( $dims[ 2 ], 'yards' ) ? $value * 36 : $value;
                     }
                 }
 
@@ -136,21 +143,49 @@ class Parser extends HtmlParser
             $this->attrs[ $name ] = $value;
         } );
 
-        if ( preg_match( '%(Measures|Dimensions):(.*?)</p>%uis', $this->description, $match ) ) {
-            preg_match_all( '%([\d.\-/]+)"%', $match[ 2 ], $dims );
-            if ( count( $dims[ 1 ] ) > count( $this->dims ) ) {
-                if ( empty( $this->dims[ 'x' ] ) ) {
-                    $this->dims[ 'x' ] = !empty( $dims[ 1 ][ 0 ] )
-                        ? StringHelper::getFloat( str_replace( '-', ' ', $dims[ 1 ][ 0 ] ) ) : null;
+        if ( preg_match( '%(Measures|Dimensions):\s*[</b>]*(.*?)(</p>|<br>)%uis', $this->description, $match ) ) {
+
+            preg_match_all( '%([\d.\-/¼½¾"yards ]+)%ui', $match[ 2 ], $sizes );
+
+            $dims = [];
+            foreach ( $sizes[ 1 ] as $size ) {
+                if ( !empty( trim( $size ) ) ) {
+                    $dims[] = $size;
                 }
-                if ( empty( $this->dims[ 'z' ] ) ) {
-                    $this->dims[ 'z' ] = !empty( $dims[ 1 ][ 1 ] )
-                        ? StringHelper::getFloat( str_replace( '-', ' ', $dims[ 1 ][ 1 ] ) ) : null;
+            }
+
+            if ( count( $dims ) > count( $this->dims ) ) {
+                if ( empty( $this->dims[ 'x' ] ) && !empty( $dims[ 0 ] ) ) {
+                    $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 0 ] ) );
+                    $this->dims[ 'x' ] = str_contains( $dims[ 0 ], 'yards' ) ? $value * 36 : $value;
                 }
-                if ( empty( $this->dims[ 'y' ] ) ) {
-                    $this->dims[ 'y' ] = !empty( $dims[ 1 ][ 2 ] )
-                        ? StringHelper::getFloat( str_replace( '-', ' ', $dims[ 1 ][ 2 ] ) ) : null;
+                if ( empty( $this->dims[ 'z' ] ) && !empty( $dims[ 1 ] ) ) {
+                    $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 1 ] ) );
+                    $this->dims[ 'z' ] = str_contains( $dims[ 1 ], 'yards' ) ? $value * 36 : $value;
                 }
+                if ( empty( $this->dims[ 'y' ] ) && !empty( $dims[ 2 ] ) ) {
+                    $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 2 ] ) );
+                    $this->dims[ 'y' ] = str_contains( $dims[ 2 ], 'yards' ) ? $value * 36 : $value;
+                }
+            }
+
+            if ( empty( $this->dims[ 'x' ] ) && preg_match( '%Lenght:([\d.\-/¼½¾"yards ]+)%ui',
+                    $this->description, $match )
+            ) {
+                $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+                $this->dims[ 'x' ] = str_contains( $match[ 1 ], 'yards' ) ? $value * 36 : $value;
+            }
+            if ( empty( $this->dims[ 'z' ] ) && preg_match( '%Width:([\d.\-/¼½¾"yards ]+)%ui',
+                    $this->description, $match )
+            ) {
+                $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+                $this->dims[ 'z' ] = str_contains( $match[ 1 ], 'yards' ) ? $value * 36 : $value;
+            }
+            if ( empty( $this->dims[ 'y' ] ) && preg_match( '%Height:([\d.\-/¼½¾"yards ]+)%ui',
+                    $this->description, $match )
+            ) {
+                $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+                $this->dims[ 'y' ] = str_contains( $match[ 1 ], 'yards' ) ? $value * 36 : $value;
             }
         }
     }
@@ -164,12 +199,12 @@ class Parser extends HtmlParser
     {
         return !empty( $this->json[ 'offers' ][ 0 ][ 'sku' ] )
             ? $this->json[ 'offers' ][ 0 ][ 'sku' ]
-            : $this->json[ 'offers' ][ 'sku' ];
+            : $this->json[ 'offers' ][ 'sku' ] ?? '';
     }
 
     public function getProduct(): string
     {
-        return $this->json[ 'name' ];
+        return $this->json[ 'name' ] ?? '';
     }
 
     public function getCostToUs(): float
@@ -187,7 +222,7 @@ class Parser extends HtmlParser
             $images[] = $image;
         } );
 
-        if ( empty( $images ) ) {
+        if ( empty( $images ) && !empty( $this->json[ 'image' ] ) ) {
             $images[] = $this->json[ 'image' ];
         }
 
@@ -196,9 +231,17 @@ class Parser extends HtmlParser
 
     public function getAvail(): ?int
     {
-        $avail = !empty( $this->json[ 'offers' ][ 0 ][ 'availability' ] )
-            ? $this->json[ 'offers' ][ 0 ][ 'availability' ]
-            : $this->json[ 'offers' ][ 'availability' ];
+        if ( str_contains( $this->getHtml( '.main' ), 'This product is currently unavailable for purchase' ) ) {
+            return 0;
+        }
+        if ( !empty( $this->json[ 'offers' ][ 0 ][ 'availability' ] ) ) {
+            $avail = $this->json[ 'offers' ][ 0 ][ 'availability' ];
+        }
+        else {
+            $avail = !empty( $this->json[ 'offers' ][ 'availability' ] )
+                ? $this->json[ 'offers' ][ 'availability' ]
+                : 0;
+        }
 
         return $avail === 'http://schema.org/InStock' ? self::DEFAULT_AVAIL_NUMBER : 0;
     }
@@ -213,13 +256,57 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        $description = preg_replace( '%</h(\d+)>%uis', "</h$1><br>", $this->description );
+        $search = [
+            '%(<h\d+>.*?\$.*?</h\d+>)\s*<%ui',
+            '%(<b>Color:\s*</b>.*?)<%ui',
+            '%(<b>Dimensions:\s*</b>.*?)<%ui',
+            '%<\w+>\s*Lenght:.*?</\w+>\s*<%uis',
+            '%<\w+>\s*Width:.*?</\w+>\s*<%uis',
+            '%<\w+>\s*Height:.*?</\w+>\s*<%uis'
+        ];
+        $description = preg_replace( $search, '<', $this->description );
+        $description = preg_replace( '%</h(\d+)>%ui', "</h$1><br>", $description );
         $this->filter( 'div.long-description p' )->each( function ( ParserCrawler $c ) use ( &$description ) {
             $p = $c->outerHtml();
             if ( str_contains( $p, '$' ) || str_contains( $p, 'Dimensions:' ) || str_contains( $p, 'Size:' ) || str_contains( $p, 'Measures:' ) ) {
                 $description = str_replace( $p, '', $description );
             }
         } );
+        $this->filter( 'div.long-description b' )->each( function ( ParserCrawler $c ) use ( &$description ) {
+            $b = $c->outerHtml();
+            if ( str_contains( $b, '$' ) || str_contains( $b, 'Dimensions:' ) || str_contains( $b, 'Size:' )
+                || str_contains( $b, 'Measures:' ) ) {
+
+                $description = str_replace( $b, '', $description );
+            }
+        } );
+        preg_match_all( '%(<br>.*?\w+.*?<br>)%ui', $description, $match );
+        foreach ( $match[ 1 ] as $m ) {
+            if ( str_contains( $m, '$' ) ) {
+                $description = str_replace( $m, '', $description );
+            }
+        }
+        preg_match_all( '%([<br>p/\s]{3,}<ul.*?</ul>)%uis', $description, $match );
+        foreach ( $match[ 1 ] as $m ) {
+            if ( str_contains( $m, '$' ) ) {
+                $description = str_replace( $m, '#del#', $description );
+            }
+        }
+        preg_match_all( '%(<li.*?</li>)%ui', $description, $match );
+        foreach ( $match[ 1 ] as $m ) {
+            if ( str_contains( $m, '$' ) ) {
+                $description = str_replace( $m, '', $description );
+            }
+        }
+        preg_match_all( '%([<br>p/\s]{3,}<table.*?</table>)%uis', $description, $match );
+        foreach ( $match[ 1 ] as $m ) {
+            if ( str_contains( $m, '$' ) ) {
+                $description = str_replace( $m, '#del#', $description );
+            }
+        }
+        $description = preg_replace( '%<h\d+.*?</h\d+#del#%', '', $description );
+        $description = str_replace( '#del#', '', $description );
+        $description = preg_replace( '%<p>Benefits:</p>\s*<ul.*?</ul>%uis', '', $description );
 
         return trim( $description );
     }
@@ -283,11 +370,6 @@ class Parser extends HtmlParser
                 return;
             }
 
-            $url = $this->getInternalId();
-            $url = str_contains( $url, '?' ) ? $url . '&sku=' . $mpn : $url . '?sku=' . $mpn;
-
-            $images = $this->parseImages( $this->getVendor()->getDownloader()->get( $url ) );
-
             preg_match( '%(\([\$\d.\s]+\))%', $c->text(), $match );
             if ( !empty( $match[ 1 ] ) ) {
                 $price = StringHelper::getFloat( $match[ 1 ] );
@@ -298,6 +380,21 @@ class Parser extends HtmlParser
                 $product = trim( $c->text(), '  ' );
             }
 
+            if ( empty( $product ) || str_contains( $product, '$' ) ) {
+                return;
+            }
+
+            $url = $this->getInternalId();
+            $url = str_contains( $url, '?' ) ? $url . '&sku=' . $mpn : $url . '?sku=' . $mpn;
+
+            $data = $this->getVendor()->getDownloader()->get( $url );
+            $data = $data->getData();
+
+            if ( str_contains( $data, 'This product is currently unavailable for purchase' ) ) {
+                return;
+            }
+
+            $images = $this->parseImages( $data );
 
             $fi = clone $parent_fi;
             $fi->setMpn( $mpn );
@@ -314,20 +411,31 @@ class Parser extends HtmlParser
         }
 
         foreach ( $this->json[ 'offers' ] as $offer ) {
-            $product = !empty( $offer[ 'size' ] ) ? 'Size: ' . $offer[ 'size' ] : '';
-            $product = !empty( $offer[ 'color' ] ) ? $product . ', Color: ' . $offer[ 'color' ] : $product;
+            if ( empty( $offer[ 'size' ] ) && empty( $offer[ 'color' ] ) ) {
+                continue;
+            }
+
+            $product = isset( $offer[ 'size' ] ) ? 'Size: ' . $offer[ 'size' ] : '';
+            $product = isset( $offer[ 'color' ] ) ? $product . ', Color: ' . $offer[ 'color' ] : $product;
 
             $mpn = $offer[ 'sku' ];
 
             $url = $this->getInternalId();
             $url = str_contains( $url, '?' ) ? $url . '&sku=' . $mpn : $url . '?sku=' . $mpn;
 
-            $images = $this->parseImages( $this->getVendor()->getDownloader()->get( $url ) );
+            $data = $this->getVendor()->getDownloader()->get( $url );
+            $data = $data->getData();
+
+            if ( str_contains( $data, 'This product is currently unavailable for purchase' ) ) {
+                continue;
+            }
+
+            $images = $this->parseImages( $data );
 
             $fi = clone $parent_fi;
             $fi->setMpn( $mpn );
             $fi->setProduct( $product );
-            $fi->setCostToUs( $offer[ 'price' ] );
+            $fi->setCostToUs( StringHelper::getMoney( $offer[ 'price' ] ?? 0.00 ) );
             $fi->setRAvail( $offer[ 'availability' ] === 'http://schema.org/InStock' ? self::DEFAULT_AVAIL_NUMBER : 0 );
             $fi->setImages( $images );
 
