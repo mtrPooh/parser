@@ -95,7 +95,7 @@ class Parser extends HtmlParser
                     }
                     if ( !empty( $dims[ 2 ] ) ) {
                         $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 2 ] ) );
-                        $this->dims[ 'x' ] = str_contains( $dims[ 2 ], 'yards' ) ? $value * 36 : $value;
+                        $this->dims[ 'y' ] = str_contains( $dims[ 2 ], 'yards' ) ? $value * 36 : $value;
                     }
                 }
                 else {
@@ -143,7 +143,7 @@ class Parser extends HtmlParser
             $this->attrs[ $name ] = $value;
         } );
 
-        if ( preg_match( '%(Measures|Dimensions):\s*[</b>]*(.*?)(</p>|<br>)%uis', $this->description, $match ) ) {
+        if ( preg_match( '%(Measures|Dimensions):[</b> ]*(.*?)(</p>|</li>|<br>)%uis', $this->description, $match ) ) {
 
             preg_match_all( '%([\d.\-/¼½¾"yardsLWH ]+)%ui', $match[ 2 ], $sizes );
 
@@ -201,6 +201,47 @@ class Parser extends HtmlParser
                 $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
                 $this->dims[ 'y' ] = str_contains( $match[ 1 ], 'yards' ) ? $value * 36 : $value;
             }
+        }
+
+        if ( preg_match( '%Diameter:\s*([\d.\-/¼½¾"yards ]+)%ui', $this->description, $match ) ) {
+            $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+            $this->dims[ 'x' ] = str_contains( $match[ 1 ], 'yards' ) ? $value * 36 : $value;
+        }
+
+        if ( preg_match( '%Outside:\s*[</b>]*(.*?)<%uis', $this->description, $match ) ) {
+
+            preg_match_all( '%([\d.\-/¼½¾"yardsimetLWH ]+)%ui', $match[ 1 ], $sizes );
+
+            $dims = [];
+            foreach ( $sizes[ 1 ] as $size ) {
+                if ( !empty( trim( $size ) ) && preg_match( '%\d+%', $size ) ) {
+                    $dims[] = $size;
+                }
+            }
+
+            foreach ( $dims as $dim ) {
+                if ( str_contains( $dim, 'W' ) || str_contains( $dim, 'iameter' ) ) {
+                    $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
+                    $this->dims[ 'x' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
+                }
+                elseif ( str_contains( $dim, 'L' ) ) {
+                    $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
+                    $this->dims[ 'y' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
+                }
+                else {
+                    $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
+                    $this->dims[ 'z' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
+                }
+            }
+        }
+
+        if ( preg_match( '%Inside:\s*[</b>]*(.*?)<%uis', $this->description, $match ) ) {
+            $this->attrs[ 'Inside' ] = trim( $match[ 1 ], ' : ' );
+        }
+
+        if ( preg_match( '%Depth:\s*[</b>]*([\d.\-/¼½¾"yards ]+)%ui', $this->description, $match ) ) {
+            $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+            $this->dims[ 'z' ] = str_contains( $match[ 1 ], 'yards' ) ? $value * 36 : $value;
         }
     }
 
@@ -274,6 +315,10 @@ class Parser extends HtmlParser
             '%(<h\d+>.*?\$.*?</h\d+>)\s*<%ui',
             '%(<b>Color:\s*</b>.*?)<%ui',
             '%(<b>Dimensions:\s*</b>.*?)<%ui',
+            '%(<b>Diameter:\s*</b>.*?)<%ui',
+            '%(<b>Outside:\s*</b>.*?)<%ui',
+            '%(<b>Inside:\s*</b>.*?)<%ui',
+            '%(<b>Depth:\s*</b>.*?)<%ui',
             '%<\w+>\s*Lenght:.*?</\w+>\s*<%uis',
             '%<\w+>\s*Width:.*?</\w+>\s*<%uis',
             '%<\w+>\s*Height:.*?</\w+>\s*<%uis'
@@ -282,14 +327,17 @@ class Parser extends HtmlParser
         $description = preg_replace( '%</h(\d+)>%ui', "</h$1><br>", $description );
         $this->filter( 'div.long-description p' )->each( function ( ParserCrawler $c ) use ( &$description ) {
             $p = $c->outerHtml();
-            if ( str_contains( $p, '$' ) || str_contains( $p, 'Dimensions:' ) || str_contains( $p, 'Size:' ) || str_contains( $p, 'Measures:' ) ) {
+            if ( str_contains( $p, '$' ) || str_contains( $p, 'Dimensions:' ) || str_contains( $p, 'Size:' ) || str_contains( $p, 'Measures:' )
+                || str_contains( $p, 'Diameter:' ) || str_contains( $p, 'Outside:' ) || str_contains( $p, 'Inside:' ) || str_contains( $p, 'Depth:' ) ) {
+
                 $description = str_replace( $p, '', $description );
             }
         } );
         $this->filter( 'div.long-description b' )->each( function ( ParserCrawler $c ) use ( &$description ) {
             $b = $c->outerHtml();
             if ( str_contains( $b, '$' ) || str_contains( $b, 'Dimensions:' ) || str_contains( $b, 'Size:' )
-                || str_contains( $b, 'Measures:' ) ) {
+                || str_contains( $b, 'Measures:' ) || str_contains( $b, 'Diameter:' ) || str_contains( $b, 'Outside:' )
+                || str_contains( $b, 'Inside:' ) || str_contains( $b, 'Depth:' ) ) {
 
                 $description = str_replace( $b, '', $description );
             }
@@ -306,9 +354,13 @@ class Parser extends HtmlParser
                 $description = str_replace( $m, '#del#', $description );
             }
         }
-        preg_match_all( '%(<li.*?</li>)%ui', $description, $match );
+        preg_match_all( '%(<li.*?</li>)%uis', $description, $match );
         foreach ( $match[ 1 ] as $m ) {
-            if ( str_contains( $m, '$' ) ) {
+            if ( str_contains( $m, '$' ) || str_contains( $m, 'Dimensions:' ) || str_contains( $m, 'Size:' )
+                || str_contains( $m, 'Color:' ) || str_contains( $m, 'Measures:' ) || str_contains( $m, 'Diameter:' )
+                || str_contains( $m, 'Outside:' ) || str_contains( $m, 'Inside:' ) || str_contains( $m, 'Depth:' )
+            ) {
+
                 $description = str_replace( $m, '', $description );
             }
         }
@@ -318,10 +370,10 @@ class Parser extends HtmlParser
                 $description = str_replace( $m, '#del#', $description );
             }
         }
-        $description = preg_replace( '%<h\d+.*?</h\d+#del#%', '', $description );
+        $description = preg_replace( [ '%<h\d+.*?</h\d+#del#%', '%<ul>\s*</ul>%ui' ], '', $description );
         $description = str_replace( '#del#', '', $description );
         $description = preg_replace( '%<p>Benefits:</p>\s*<ul.*?</ul>%uis', '', $description );
-        
+
         return trim( $description );
     }
 
