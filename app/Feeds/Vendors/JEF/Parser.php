@@ -143,7 +143,7 @@ class Parser extends HtmlParser
             $this->attrs[ $name ] = $value;
         } );
 
-        if ( preg_match( '%(Measures|Dimensions):[</b> ]*(.*?)(</p>|</li>|<br>)%uis', $this->description, $match ) ) {
+        if ( preg_match( '%(Measures|Dimensions):[</b> ]*(.*?)(</p>|</li>|<br>|<ul>)%ui', $this->description, $match ) ) {
 
             preg_match_all( '%([\d.\-/¼½¾"yardsLWH ]+)%ui', $match[ 2 ], $sizes );
 
@@ -224,7 +224,7 @@ class Parser extends HtmlParser
                     $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
                     $this->dims[ 'x' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
                 }
-                elseif ( str_contains( $dim, 'L' ) ) {
+                elseif ( str_contains( $dim, 'L' ) || str_contains( $dim, 'H' ) ) {
                     $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
                     $this->dims[ 'y' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
                 }
