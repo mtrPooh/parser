@@ -4,6 +4,7 @@ namespace App\Feeds\Vendors\CSE;
 
 use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
+use App\Helpers\FeedHelper;
 use App\Helpers\StringHelper;
 use App\Feeds\Utils\Data;
 
@@ -107,7 +108,8 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        return preg_replace( '%<table.*?</table>\s*%uis', '', $this->json[ 'products' ][ 0 ][ 'description2' ] );
+        return trim( FeedHelper::cleanProductDescription(
+            preg_replace( '%<table.*?</table>\s*%uis', '', $this->json[ 'products' ][ 0 ][ 'description2' ] ) ) ) ?: $this->getProduct();
     }
 
     public function getAttributes(): ?array
@@ -186,14 +188,10 @@ class Parser extends HtmlParser
 
                 $fi->setImages( $images );
 
-                if ( !empty( $variant[ 'description' ] ) ) {
-                    $fi->setFulldescr( ucfirst( $variant[ 'description' ] ) . "\n" . $this->getDescription() );
-                }
-
                 $attrs = $this->getAttributes();
                 if ( !empty( $variant[ 'descriptions' ][ 0 ] ) ) {
                     foreach ( $variant[ 'descriptions' ][ 0 ] as $key => $value ) {
-                        $key = trim( $key );
+                        $key = ucfirst( trim( $key ) );
                         $value = trim( $value );
                         if ( empty( $key ) || empty( $value ) || $key === 'unit' ) {
                             continue;
@@ -202,11 +200,11 @@ class Parser extends HtmlParser
                             $fi->setDimZ( StringHelper::getFloat( $value ) );
                         }
                         else {
-                            $attrs[ trim( $key, ': ' ) ] = $value;
+                            $attrs[ trim( preg_replace( '%([A-Z]+)%', ' $1', $key ), ': ' ) ] = $value;
                         }
                     }
                 }
-
+                
                 if ( !empty( $attrs ) ) {
                     $fi->setAttributes( $attrs );
                 }
