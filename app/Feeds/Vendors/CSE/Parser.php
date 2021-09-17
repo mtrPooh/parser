@@ -192,6 +192,7 @@ class Parser extends HtmlParser
                 if ( !empty( $variant[ 'descriptions' ][ 0 ] ) ) {
                     foreach ( $variant[ 'descriptions' ][ 0 ] as $key => $value ) {
                         $key = ucfirst( trim( $key ) );
+                        $key = trim( preg_replace( '%([A-Z]+)%', ' $1', $key ), ': ' );
                         $value = trim( $value );
                         if ( empty( $key ) || empty( $value ) || $key === 'unit' ) {
                             continue;
@@ -200,7 +201,7 @@ class Parser extends HtmlParser
                             $fi->setDimZ( StringHelper::getFloat( $value ) );
                         }
                         else {
-                            $attrs[ trim( preg_replace( '%([A-Z]+)%', ' $1', $key ), ': ' ) ] = $value;
+                            $attrs[ $key ] = $value;
                         }
                     }
                 }
