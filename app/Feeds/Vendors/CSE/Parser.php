@@ -67,10 +67,10 @@ class Parser extends HtmlParser
     {
         if ( empty( $this->json[ 'products' ][ 0 ][ 'promotion' ][ 'promotionPrice' ][ 'amount' ] ) ) {
             $this->list_price = null;
-            return StringHelper::getFloat( $this->json[ 'products' ][ 0 ][ 'price' ][ 'amount' ] ) ?? 0.00;
+            return StringHelper::getMoney( $this->json[ 'products' ][ 0 ][ 'price' ][ 'amount' ] );
         }
 
-        return StringHelper::getFloat( $this->json[ 'products' ][ 0 ][ 'promotion' ][ 'promotionPrice' ][ 'amount' ] ) ?? 0.00;
+        return StringHelper::getMoney( $this->json[ 'products' ][ 0 ][ 'promotion' ][ 'promotionPrice' ][ 'amount' ] );
     }
 
     public function getListPrice(): ?float
