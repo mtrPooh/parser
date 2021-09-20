@@ -17,6 +17,7 @@ class FeedHelper
             $description = self::cleanProductData( $description );
             $description = StringHelper::cutTagsAttributes( $description );
             $description = str_replace( [ '<div>', '</div>' ], [ '<p>', '</p>' ], html_entity_decode( StringHelper::removeSpaces( $description ) ) );
+            $description = preg_replace( '/<h[\d]?>(.*?)<\/h[\d]?>/', '<p>$1</p>', $description );
 
             /** Removes empty tags from the product description **/
             $description = StringHelper::cutEmptyTags( StringHelper::cutTags( $description ) );
@@ -168,24 +169,26 @@ class FeedHelper
     public static function getShortsAndAttributesInDescription( string $description, array $user_regexes = [], array $short_description = [], array $attributes = [] ): array
     {
         $description = StringHelper::cutTagsAttributes( $description );
+        $description = StringHelper::cutEmptyTags( $description );
+        $description = StringHelper::normalizeSpaceInString( $description );
 
         $product_data = [
             'short_description' => $short_description,
             'attributes' => $attributes
         ];
 
-        $regex_pattern = '<(div|p|span|b|strong|h\d|em)>%s(\s+)?((<\/\w+>)+)?:?(\s+)?<\/(div|p|span|b|strong|h\d|em)>(\s+)?((<\w+>)+)?((<\/\w+>)+)?((<\w+>)+)?(\s+)?';
+        $regex_pattern = '<(div|p|span|b|strong|h[\d]?|em)>%s(\s+)?((<\/\w+>)+)?:?(\s+)?<\/(div|p|span|b|strong|h[\d]?|em)>(\s+)?((<\w+>)+)?((<\/\w+>)+)?((<\w+>)+)?(\s+)?';
 
         $keys = [
-            'Dimension(s)?',
-            'Specification(s)?',
-            '(Key)?(\s+)?Benefit(s)?',
-            '(Key)?(\s+)?Feature(s)?',
-            'Detail(s)?',
+            '(Product[s]?)?(\s+)?Dimension[s]?',
+            '(Product[s]?)?(\s+)?Specification[s]?',
+            '(Product[s]?|Key)?(\s+)?Benefit[s]?',
+            '(Product[s]?|Key)?(\s+)?Feature[s]?',
+            '(Product[s]?)?(\s+)?Detail[s]?',
         ];
 
         $regexes_list = [
-            '(<(u|o)l>)?(\s+)?(?<content_list><li>.*?<\/li>)(\s+)?<\/(u|o)l>',
+            '(<[u|o]l>)?(\s+)?(?<content_list><li>.*?<\/li>)(\s+)?<\/[u|o]l>',
             '(?<content_list><li>.*<\/li>)(\s+)?'
         ];
 
@@ -210,7 +213,7 @@ class FeedHelper
                         if ( !str_starts_with( $delimiter, '<' ) ) {
                             $delimiter = "<$delimiter>";
                         }
-                        $list_data = self::getShortsAndAttributesInList( str_replace( [ "<$delimiter>", "</$delimiter>" ], [ '<li>', '</li>' ], $content_list ) );
+                        $list_data = self::getShortsAndAttributesInList( str_replace( [ $delimiter, str_replace( '<', '</', $delimiter ) ], [ '<li>', '</li>' ], $content_list ) );
                     }
                     elseif ( str_contains( $content_list, '<li>' ) ) {
                         $list_data = self::getShortsAndAttributesInList( $content_list );
@@ -225,7 +228,36 @@ class FeedHelper
                     $product_data[ 'short_description' ] = array_merge( $product_data[ 'short_description' ], $list_data[ 'short_description' ] );
                     $product_data[ 'attributes' ] = array_merge( $product_data[ 'attributes' ], $list_data[ 'attributes' ] );
                 }
-                $description = preg_replace( $regex, '', $description );
+
+                $replacement = '';
+                foreach ( $product_data[ 'short_description' ] as $short ) {
+                    if ( count( $product_data[ 'short_description' ] ) >= 10 || mb_strlen( $short ) > 250 ) {
+                        $replacement .= '<li>' . implode( '</li><li>', $product_data[ 'short_description' ] ) . '</li>';
+
+                        $product_data[ 'short_description' ] = [];
+                        break;
+                    }
+                }
+
+                foreach ( $product_data[ 'attributes' ] as $attribute ) {
+                    if ( mb_strlen( $attribute ) > 100 ) {
+                        foreach ( $product_data[ 'attributes' ] as $key => $value ) {
+                            $replacement .= "<li>$key: $value</li>";
+                        }
+
+                        $product_data[ 'attributes' ] = [];
+                        break;
+                    }
+                }
+
+                if ( empty( $replacement ) ) {
+                    $description = (string)preg_replace( $regex, '', $description );
+                }
+                else {
+                    $split_string = preg_split( $regex, $description );
+                    $split_string[ 0 ] .= "<ul>$replacement</ul>";
+                    $description = implode( $replacement, $split_string );
+                }
             }
         }
 

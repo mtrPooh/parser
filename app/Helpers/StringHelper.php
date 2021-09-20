@@ -271,9 +271,15 @@ class StringHelper
      */
     public static function cutEmptyTags( string $string ): string
     {
-        $string = preg_replace( '/<[^<br>]>(\s+)?((<br>(\s+)?)+)?(\s+)?<\/\w+>/i', '', self::normalizeSpaceInString( $string ) );
-        if ( preg_match( '/<[^<br>]>(\s+)?((<br>(\s+)?)+)?(\s+)?<\/\w+>/', $string ) ) {
-            $string = self::cutEmptyTags( $string );
+        $clean_regex = [
+            '/<[u|o]l>((\s+)?<li>(\s+)?)+<\/[u|o]l>/is',
+            '/<[^<br>|^\/](\w+){0,10}>(\s+)?((<br>(\s+)?)+)?(\s+)?<\/\w+>/i'
+        ];
+        $string = preg_replace( $clean_regex, '', self::normalizeSpaceInString( $string ) );
+        foreach ( $clean_regex as $regex ) {
+            if ( preg_match( $regex, $string ) ) {
+                $string = self::cutEmptyTags( $string );
+            }
         }
         return $string;
     }
@@ -441,19 +447,21 @@ class StringHelper
     public static function getFloat( ?string $string, ?float $default = null ): ?float
     {
         $replacements = [
-            '¼' => '1/4',
-            '½' => '1/2',
-            '¾' => '3/4',
+            '¼' => ' 1/4',
+            '½' => ' 1/2',
+            '¾' => ' 3/4',
         ];
 
         $string = str_replace( array_keys( $replacements ), array_values( $replacements ), $string );
         $string = trim( $string );
-        if ( preg_match( '/(\d+\s)?(\.?\d+(\.?\/?\d+)?)/', str_replace( ',', '', $string ), $match_float ) ) {
-            if ( str_contains( $match_float[ 2 ], '/' ) ) {
-                [ $divisible, $divisor ] = explode( '/', $match_float[ 2 ] );
-                $match_float[ 2 ] = $divisible / $divisor;
+        if ( preg_match( '/(?<integer>\d+\s)?(-)?(\s+)?(?<fractional>\.?\d+(\.?\/?\d+)?)/', str_replace( ',', '', $string ), $match_float ) ) {
+            if ( isset( $match_float[ 'fractional' ] ) && str_contains( $match_float[ 'fractional' ], '/' ) ) {
+                [ $divisible, $divisor ] = explode( '/', $match_float[ 'fractional' ] );
+                $match_float[ 'fractional' ] = $divisible / $divisor;
             }
-            return self::normalizeFloat( isset( $match_float[ 1 ] ) ? (float)$match_float[ 1 ] + (float)$match_float[ 2 ] : (float)$match_float[ 2 ], $default );
+            return self::normalizeFloat( isset( $match_float[ 'integer' ] )
+                ? (float)$match_float[ 'integer' ] + (float)$match_float[ 'fractional' ]
+                : (float)$match_float[ 'fractional' ], $default );
         }
         return $default;
     }
