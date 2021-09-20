@@ -12,7 +12,9 @@ class Parser extends HtmlParser
     private array $json = [];
     private ?array $attrs = null;
     private array $dims = [];
+    private array $shorts = [];
     private string $description = '';
+    private ?float $weight = null;
 
     private function parseImages( string $data ): array
     {
@@ -243,6 +245,59 @@ class Parser extends HtmlParser
             $value = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
             $this->dims[ 'z' ] = str_contains( $match[ 1 ], 'yards' ) ? $value * 36 : $value;
         }
+
+        if ( preg_match( '%Features:[</h\d+>brp\s]*<ul>(.*?)</ul>%uis', $this->description, $match ) ) {
+
+            preg_match_all( '%<li>(.*?)</li>%ui', $match[ 1 ], $shorts );
+
+            foreach ( $shorts[ 1 ] as $short ) {
+                if ( str_contains( $short, ':' ) ) {
+                    $short = explode( ':', $short );
+                    $key = ucfirst( trim( strip_tags( $short[ 0 ] ) ) );
+                    $value = trim( strip_tags( $short[ 1 ] ) );
+                    if ( empty( $key ) || empty( $value ) ) {
+                        continue;
+                    }
+                    if ( $key === 'Weight' ) {
+                        $this->weight = StringHelper::getFloat( $value );
+                    }
+                    elseif ( $key === 'Colors' && isset( $this->attrs[ 'Color' ] ) ) {
+                        continue;
+                    }
+                    else {
+                        $this->attrs[ $key ] = $value;
+                    }
+                }
+                else {
+                    $this->shorts[] = trim( strip_tags( $short ) );
+                }
+            }
+        }
+
+        if ( preg_match( '%Specifications:[</h\d+>brp\s]*<ul>(.*?)</ul>%uis', $this->description, $match ) ) {
+
+            preg_match_all( '%<li>(.*?)</li>%ui', $match[ 1 ], $shorts );
+
+            foreach ( $shorts[ 1 ] as $short ) {
+                if ( str_contains( $short, ':' ) ) {
+                    $short = explode( ':', $short );
+                    $key = ucfirst( trim( strip_tags( $short[ 0 ] ) ) );
+                    $value = trim( strip_tags( $short[ 1 ] ) );
+                    if ( empty( $key ) || empty( $value ) || str_contains( $value, '$' ) ) {
+                        continue;
+                    }
+                    if ( $key === 'Weight' ) {
+                        $this->weight = StringHelper::getFloat( $value );
+                    }
+                    elseif ( $key === 'Colors' && isset( $this->attrs[ 'Color' ] ) ) {
+                        continue;
+                    }
+                    else {
+                        $this->attrs[ $key ] = $value;
+                    }
+                }
+            }
+        }
     }
 
     public function isGroup(): bool
@@ -373,13 +428,26 @@ class Parser extends HtmlParser
         $description = preg_replace( [ '%<h\d+.*?</h\d+#del#%', '%<ul>\s*</ul>%ui' ], '', $description );
         $description = str_replace( '#del#', '', $description );
         $description = preg_replace( '%<p>Benefits:</p>\s*<ul.*?</ul>%uis', '', $description );
+        $description = preg_replace( '%>[<h\w+>bp\s]*Features:[</h\d+>brp\s]*<ul>(.*?)</ul>%uis', '>', $description );
+        $description = preg_replace( '%([<h\w+>bp\s]*)NOTE:[</h\d+>brp\s]*.*?\$.*?<%uis', '$1<', $description );
+        $description = preg_replace( '%(<ul>|<li>).*?</ul>%uis', '', $description );
 
         return trim( $description );
+    }
+
+    public function getShortDescription(): array
+    {
+        return $this->shorts;
     }
 
     public function getAttributes(): ?array
     {
         return $this->attrs ?? null;
+    }
+
+    public function getWeight(): ?float
+    {
+        return $this->weight;
     }
 
     public function getBrand(): string
