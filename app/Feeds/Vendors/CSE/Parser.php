@@ -181,7 +181,7 @@ class Parser extends HtmlParser
                 }
 
                 if ( !empty( $variant[ 'weight' ] ) ) {
-                    $fi->setWeight( StringHelper::getFloat( $variant[ 'weight' ] ) );
+                    $fi->setWeight( FeedHelper::convertLbsFromG( $variant[ 'weight' ] ) );
                 }
 
                 $fi->setRAvail( StringHelper::getFloat( $variant[ 'stocks' ] ) ?: 0 );
