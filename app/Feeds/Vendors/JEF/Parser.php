@@ -20,7 +20,12 @@ class Parser extends HtmlParser
     {
         preg_match_all( '%<li class="alternate-image.*?href="(.*?)"%uis', $data, $match );
         if ( empty( $match[ 1 ] ) ) {
-            $images[] = $this->json[ 'image' ];
+            if ( preg_match( '%<meta content="(.*?)" property="og:image"%ui', $data, $match ) ) {
+                $images[] = $match[ 1 ];
+            }
+            else {
+                $images[] = $this->json[ 'image' ];
+            }
         }
         else {
             $images = $match[ 1 ];
