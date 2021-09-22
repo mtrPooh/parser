@@ -43,6 +43,7 @@ class Parser extends HtmlParser
                 $new_filename = substr( $filename, 0, strpos( $filename, '?' ) );
                 $images[ $key ] = str_replace( $filename, $new_filename, $value );
             }
+            $images[ $key ] = str_replace( 'detail', 'zoom', $images[ $key ] );
         }
 
         return array_values( array_unique( $images ) );
@@ -150,7 +151,8 @@ class Parser extends HtmlParser
             $this->attrs[ $name ] = $value;
         } );
 
-        if ( preg_match( '%(Measures|Dimensions):[</b> ]*(.*?)(</p>|</li>|<br>|<ul>)%ui', $this->description, $match ) ) {
+        if ( preg_match( '%(Measures|Dimensions):[</b> ]*(.*?)(</p>|</li>|<br>|<ul>)%ui', $this->description, $match )
+            && !str_contains( $match[ 2 ], 'brist' ) ) {
 
             preg_match_all( '%([\d.\-/¼½¾"yardsLWH ]+)%ui', $match[ 2 ], $sizes );
 
