@@ -4,6 +4,7 @@ namespace App\Feeds\Vendors\ZRQ;
 
 use App\Feeds\Parser\HtmlParser;
 use App\Feeds\Utils\ParserCrawler;
+use App\Helpers\FeedHelper;
 use App\Helpers\StringHelper;
 
 class Parser extends HtmlParser
@@ -29,6 +30,24 @@ class Parser extends HtmlParser
         if ( !empty( $match[ 1 ][ 2 ] ) ) {
             $this->dims[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ][ 2 ] ) );
         }
+
+        if ( str_contains( $text, 'Oval' ) ) {
+            $value = $this->dims[ 'z' ];
+            $this->dims[ 'z' ] = $this->dims[ 'x' ];
+            $this->dims[ 'x' ] = $value;
+        }
+
+        if ( str_contains( $text, 'Mount' ) ) {
+            $this->dims[ 'y' ] = $this->dims[ 'x' ];
+            $this->dims[ 'x' ] = $this->dims[ 'z' ];
+            $this->dims[ 'z' ] = null;
+        }
+
+        if ( str_contains( $text, 'H' ) && str_contains( $text, 'W' ) ) {
+            $value = $this->dims[ 'z' ];
+            $this->dims[ 'z' ] = $this->dims[ 'y' ];
+            $this->dims[ 'y' ] = $value;
+        }
     }
 
     public function parseContent( $data, $params = [] ): array
@@ -50,7 +69,7 @@ class Parser extends HtmlParser
         // Available
         $this->avail = str_contains( $this->body, '>[IN STOCK]<' ) ? self::DEFAULT_AVAIL_NUMBER : 0;
 
-        // Short Description, Dimensions
+        // Short Description, Dimensions, Weight
         if ( preg_match( '%SPECS\s*</\w+>(.*?)</div>\s*</div>%uis', $this->body, $match ) ) {
 
             $data = explode( '</div>', $match[ 1 ] );
@@ -69,6 +88,10 @@ class Parser extends HtmlParser
                         $text = substr( $d, 0, strpos( $d, 'Weigh' ) );
                     }
                     if ( substr_count( $text, 'Dimension' ) > 1 ) {
+                        $short = substr( $d, strrpos( $text, 'Dimension' ) );
+                        $short = str_contains( $short, 'Weigh' ) ? substr( $short, 0, strrpos( $short, 'Weigh' ) ) : $short;
+                        $short = str_contains( $short, 'Price' ) ? substr( $short, 0, strrpos( $short, 'Price' ) ) : $short;
+                        $this->shorts[] = trim( $short );
                         $text = substr( $d, 0, strrpos( $text, 'Dimension' ) );
                     }
 
@@ -77,7 +100,7 @@ class Parser extends HtmlParser
                     $need_skip = true;
                 }
 
-                if ( empty( $this->dims ) && preg_match( '%([\d]+\s*[\d.\-/¼½¾"”inx ]+)%ui', $d, $match )
+                if ( empty( $this->dims ) && preg_match( '%([\d]+[\d.\-/¼½¾"”inx ]+)%ui', $d, $match )
                     && strlen( strip_tags( $d ) ) === strlen( $match[ 1 ] ) ) {
 
                     $this->parseDims( $d );
@@ -85,18 +108,36 @@ class Parser extends HtmlParser
                     $need_skip = true;
                 }
 
-                if ( str_contains( $d, 'Diameter' ) && preg_match( '%([\d.\-/¼½¾" ]+)%u', $d, $match ) ) {
+                if ( str_contains( $d, 'Diameter' ) && preg_match( '%([\d]+[\d.\-/¼½¾" ]+)%u', $d, $match ) ) {
                     $this->dims[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
                     $need_skip = true;
                 }
 
-                if ( preg_match( '%Shipping Weigh[st:\s]+([\d.\-/¼½¾" ]+)%ui', $d, $match ) ) {
+                if ( str_contains( $d, 'Assembled length' ) && preg_match( '%([\d]+[\d.\-/¼½¾" ]+)%u', $d, $match ) ) {
+                    $this->dims[ 'z' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+                    $need_skip = true;
+                }
+                if ( str_contains( $d, 'Assembled width' ) && preg_match( '%([\d]+[\d.\-/¼½¾" ]+)%u', $d, $match ) ) {
+                    $this->dims[ 'x' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+                    $need_skip = true;
+                }
+                if ( str_contains( $d, 'Assembled height' ) && preg_match( '%([\d]+[\d.\-/¼½¾" ]+)%u', $d, $match ) ) {
+                    $this->dims[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+                    $need_skip = true;
+                }
+
+                if ( preg_match( '%Shipping Weigh[st:\s]+([\d]+[\d.\-/¼½¾" ]+)%ui', $d, $match ) ) {
                     $this->s_weight = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
                     $need_skip = true;
                 }
 
-                if ( preg_match( '%Weigh[st:\s]+([\d.\-/¼½¾" ]+)%ui', $d, $match ) ) {
+                if ( preg_match( '%Weigh[st:\s]+([\d]+[\d.\-/¼½¾" ]+)%ui', $d, $match ) ) {
                     $this->weight = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+                    $need_skip = true;
+                }
+
+                if ( preg_match( '%^Color[:\s]+(.*?)$%ui', $d, $match ) ) {
+                    $this->attrs[ 'Color' ] = trim( $match[ 1 ] );
                     $need_skip = true;
                 }
 
@@ -105,6 +146,13 @@ class Parser extends HtmlParser
                 }
             }
         }
+
+        $this->filter( 'div.description-section p' )->each( function ( ParserCrawler $c ) {
+            $p = $c->getHtml( 'p' );
+            if ( str_contains( $p, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
+                $this->weight = FeedHelper::convertLbsFromOz( StringHelper::getFloat( $p ) );
+            }
+        } );
     }
 
     public function getMpn(): string
@@ -142,7 +190,7 @@ class Parser extends HtmlParser
                 $new_filename = substr( $filename, 0, strpos( $filename, '?' ) );
                 $image = str_replace( $filename, $new_filename, $image );
             }
-            $images[] = $image;
+            $images[] = trim( $image );
         } );
 
         return array_values( array_unique( $images ) );
@@ -151,6 +199,15 @@ class Parser extends HtmlParser
     public function getAvail(): ?int
     {
         return $this->avail;
+    }
+
+    public function getMinAmount(): ?int
+    {
+        if ( $this->exists( 'select#product-quantity option' ) ) {
+            $min_amount = (int) $this->getAttr( 'select#product-quantity option', 'value' );
+        }
+
+        return $min_amount ?? null;
     }
 
     public function getCategories(): array
@@ -173,14 +230,47 @@ class Parser extends HtmlParser
             if ( str_contains( $p, 'Part Number' ) || str_contains( $p, '$' ) ) {
                 $description = str_replace( $p, '', $description );
             }
+            if ( str_contains( $p, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
+                $description = str_replace( $p, '', $description );
+            }
             if ( str_contains( $p, 'Width' ) ) {
                 $this->dims[ 'x' ] = StringHelper::getFloat( $p );
                 $description = str_replace( $p, '', $description );
             }
         } );
-        $description = preg_replace( '%<h\d+>\s*DESCRIPTION\s*</h\d+>\s*%ui', '', $description );
 
-        return trim( $description );
+        $chip_table = '';
+        if ( preg_match( '%chip\s*=\s*({\s*".*?})\s*;%is', $this->body, $match ) ) {
+
+            preg_match_all( '%"([\$\d.,]+)".*?quantity:\s*([\d]+)%', $match[ 1 ], $chips, PREG_SET_ORDER );
+
+            $row = [];
+            $col = 0;
+            foreach ( $chips as $chip ) {
+                $col++;
+                $row[] = '<td>' . $chip[ 1 ] . '<br>' . $chip[ 2 ] . '</td>';
+                if ( $col === 3 ) {
+                    $chip_table .= '<tr>' . implode( '', $row ) . '</tr>';
+                    $row = [];
+                    $col = 0;
+                }
+            }
+
+            if ( !empty( $row ) ) {
+                $last_row = '';
+                for ( $i = 0; $i < 3; $i++ ) {
+                    $last_row .= $row[ $i ] ?? '<td></td>';
+                }
+                $chip_table .= '<tr>' . $last_row . '</tr>';
+            }
+
+            $chip_table = '<table>' . $chip_table . '</table>';
+        }
+
+        $description = trim( preg_replace( [ '%<h\d+>\s*DESCRIPTION\s*</h\d+>\s*%ui', '%<div>\s*</div>%ui' ], '',
+                $description ) ) . $chip_table;
+
+        return $description ?: $this->getProduct();
     }
 
     public function getShortDescription(): array
