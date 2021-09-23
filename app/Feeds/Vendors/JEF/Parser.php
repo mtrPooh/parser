@@ -83,7 +83,7 @@ class Parser extends HtmlParser
             if ( ( $name === 'Size' || $name === 'Dimensions' ) && str_contains( $value, ',' ) === false
                 && str_contains( $value, 'ount' ) === false && str_contains( $value, 'uart' ) === false ) {
 
-                preg_match_all( '%([\d.\-/¼½¾"yards ]+)%ui', $value, $match );
+                preg_match_all( '%([\d]+[\d.\-/¼½¾"yardsLWH ]+)%ui', $value, $match );
 
                 $dims = [];
                 foreach ( $match[ 1 ] as $size ) {
@@ -93,17 +93,19 @@ class Parser extends HtmlParser
                 }
 
                 if ( str_contains( $value, 'L' ) || str_contains( $value, 'W' ) || str_contains( $value, 'H' ) ) {
-                    if ( !empty( $dims[ 0 ] ) ) {
-                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 0 ] ) );
-                        $this->dims[ 'x' ] = str_contains( $dims[ 0 ], 'yards' ) ? $value * 36 : $value;
-                    }
-                    if ( !empty( $dims[ 1 ] ) ) {
-                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 1 ] ) );
-                        $this->dims[ 'z' ] = str_contains( $dims[ 1 ], 'yards' ) ? $value * 36 : $value;
-                    }
-                    if ( !empty( $dims[ 2 ] ) ) {
-                        $value = StringHelper::getFloat( str_replace( '-', ' ', $dims[ 2 ] ) );
-                        $this->dims[ 'y' ] = str_contains( $dims[ 2 ], 'yards' ) ? $value * 36 : $value;
+                    foreach ( $dims as $dim ) {
+                        if ( str_contains( $dim, 'L' ) ) {
+                            $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
+                            $this->dims[ 'z' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
+                        }
+                        if ( str_contains( $dim, 'W' ) ) {
+                            $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
+                            $this->dims[ 'x' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
+                        }
+                        if ( str_contains( $dim, 'H' ) ) {
+                            $value = StringHelper::getFloat( str_replace( '-', ' ', $dim ) );
+                            $this->dims[ 'y' ] = str_contains( $dim, 'yards' ) ? $value * 36 : $value;
+                        }
                     }
                 }
                 else {
