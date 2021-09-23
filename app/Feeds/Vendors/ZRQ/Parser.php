@@ -141,6 +141,16 @@ class Parser extends HtmlParser
                     $need_skip = true;
                 }
 
+                if ( $need_skip === false && !empty( $d ) && str_contains( $d, ':' ) ) {
+                    $data = explode( ':', $d );
+                    $key = trim( $data[ 0 ] );
+                    $value = trim( $data[ 1 ] );
+                    if ( !empty( $key ) && !empty( $value ) ) {
+                        $this->attrs[ $key ] = $value;
+                        $need_skip = true;
+                    }
+                }
+
                 if ( $need_skip === false && !empty( $d ) && !str_contains( $d, '$' ) ) {
                     $this->shorts[] = $d;
                 }
@@ -226,16 +236,48 @@ class Parser extends HtmlParser
             $description = str_ireplace( $c->outerHtml(), '', $description );
         } );
         $this->filter( 'div.description-section p' )->each( function ( ParserCrawler $c ) use ( &$description ) {
-            $p = $c->getHtml( 'p' );
-            if ( str_contains( $p, 'Part Number' ) || str_contains( $p, '$' ) ) {
-                $description = str_replace( $p, '', $description );
+            $p = $c->outerHtml();
+
+            preg_match_all( '%br>([\w]+.*?:.*?)<%', $p, $match );
+            if ( !empty( $match[ 1 ] ) ) {
+                foreach ( $match[ 1 ] as $data ) {
+                    $d = explode( ':', $data );
+
+                    $key = trim( $d[ 0 ] );
+                    $value = trim( $d[ 1 ] );
+
+                    if ( str_contains( $key, 'Description' ) ) {
+                        $description = str_replace( $data, '', $description );
+                        continue;
+                    }
+                    if ( str_contains( $key, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
+                        $description = str_replace( $data, '', $description );
+                        continue;
+                    }
+                    if ( str_contains( $key, 'Width' ) ) {
+                        $this->dims[ 'x' ] = StringHelper::getFloat( $value );
+                        $description = str_replace( $data, '', $description );
+                        continue;
+                    }
+                    if ( !empty( $key ) && !empty( $value ) ) {
+                        $this->attrs[ $key ] = $value;
+                        $description = str_replace( $data, '', $description );
+                    }
+                }
             }
-            if ( str_contains( $p, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
-                $description = str_replace( $p, '', $description );
-            }
-            if ( str_contains( $p, 'Width' ) ) {
-                $this->dims[ 'x' ] = StringHelper::getFloat( $p );
-                $description = str_replace( $p, '', $description );
+            else {
+                if ( str_contains( $p, '$' ) || str_contains( $p, 'Part Number' ) || str_contains( $p, 'Product Name' )
+                    || str_contains( $p, 'Description' ) ) {
+
+                    $description = str_replace( $p, '', $description );
+                }
+                if ( str_contains( $p, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
+                    $description = str_replace( $p, '', $description );
+                }
+                if ( str_contains( $p, 'Width' ) ) {
+                    $this->dims[ 'x' ] = StringHelper::getFloat( $p );
+                    $description = str_replace( $p, '', $description );
+                }
             }
         } );
 
@@ -306,6 +348,18 @@ class Parser extends HtmlParser
     public function getShippingWeight(): ?float
     {
         return $this->s_weight;
+    }
+
+    public function getOptions(): array
+    {
+        if ( preg_match( '%Color[:\s]+</h.*?<select.*?>(.*?)</select%uis', $this->body, $match ) ) {
+            preg_match_all( '%<option.*?>(.*?)</option>%', $match[ 1 ], $opts );
+            foreach ( $opts[ 1 ] as $opt ) {
+                $options[ 'Color' ][] = trim( $opt );
+            }
+        }
+
+        return $options ?? [];
     }
 
     public function getVideos(): array
