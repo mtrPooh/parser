@@ -235,51 +235,84 @@ class Parser extends HtmlParser
         $this->filter( 'ul' )->each( function ( ParserCrawler $c ) use ( &$description ) {
             $description = str_ireplace( $c->outerHtml(), '', $description );
         } );
-        $this->filter( 'div.description-section p' )->each( function ( ParserCrawler $c ) use ( &$description ) {
-            $p = $c->outerHtml();
 
-            preg_match_all( '%br>([\w]+.*?:.*?)<%', $p, $match );
-            if ( !empty( $match[ 1 ] ) ) {
-                foreach ( $match[ 1 ] as $data ) {
-                    $d = explode( ':', $data );
+        $specs_found = false;
+        $this->filter( 'div.description-section p' )
+            ->each( function ( ParserCrawler $c ) use ( &$description, &$specs_found ) {
 
-                    $key = trim( $d[ 0 ] );
-                    $value = trim( $d[ 1 ] );
+                $p = $c->outerHtml();
 
-                    if ( str_contains( $key, 'Description' ) ) {
-                        $description = str_replace( $data, '', $description );
-                        continue;
-                    }
-                    if ( str_contains( $key, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
-                        $description = str_replace( $data, '', $description );
-                        continue;
-                    }
-                    if ( str_contains( $key, 'Width' ) ) {
-                        $this->dims[ 'x' ] = StringHelper::getFloat( $value );
-                        $description = str_replace( $data, '', $description );
-                        continue;
-                    }
-                    if ( !empty( $key ) && !empty( $value ) ) {
-                        $this->attrs[ $key ] = $value;
-                        $description = str_replace( $data, '', $description );
+                preg_match_all( '%br>([\w]+.*?:.*?)<%', $p, $match );
+                if ( !empty( $match[ 1 ] ) ) {
+                    foreach ( $match[ 1 ] as $data ) {
+                        $d = explode( ':', $data );
+
+                        $key = trim( strip_tags( $d[ 0 ] ) );
+                        $value = trim( strip_tags( $d[ 1 ] ) );
+
+                        if ( str_contains( $key, 'Description' ) ) {
+                            $description = str_replace( $data, '', $description );
+                            continue;
+                        }
+                        if ( str_contains( $key, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
+                            $description = str_replace( $data, '', $description );
+                            continue;
+                        }
+                        if ( str_contains( $key, 'Width' ) ) {
+                            $this->dims[ 'x' ] = StringHelper::getFloat( $value );
+                            $description = str_replace( $data, '', $description );
+                            continue;
+                        }
+                        if ( !empty( $key ) && !empty( $value ) ) {
+                            $this->attrs[ $key ] = $value;
+                            $description = str_replace( $data, '', $description );
+                        }
                     }
                 }
-            }
-            else {
-                if ( str_contains( $p, '$' ) || str_contains( $p, 'Part Number' ) || str_contains( $p, 'Product Name' )
-                    || str_contains( $p, 'Description' ) ) {
+                else {
+                    if ( str_contains( $p, 'Specification' ) ) {
+                        $specs_found = true;
+                        $description = str_replace( $p, '', $description );
+                        return;
+                    }
+                    if ( str_contains( $p, '$' ) || str_contains( $p, 'Part Number' ) || str_contains( $p, 'Product Name' )
+                        || str_contains( $p, 'Description' ) || str_contains( $p, 'Specification' ) ) {
 
-                    $description = str_replace( $p, '', $description );
+                        $description = str_replace( $p, '', $description );
+                        return;
+                    }
+
+                    if ( str_contains( $p, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
+                        $description = str_replace( $p, '', $description );
+                        return;
+                    }
+                    if ( str_contains( $p, 'Width' ) ) {
+                        $this->dims[ 'x' ] = StringHelper::getFloat( $p );
+                        $description = str_replace( $p, '', $description );
+                        return;
+                    }
+                    if ( $specs_found && str_contains( $p, ':' ) ) {
+                        $d = explode( ':', $p );
+
+                        $key = trim( strip_tags( $d[ 0 ] ) );
+                        $value = trim( strip_tags( $d[ 1 ] ) );
+
+                        if ( !empty( $key ) && !empty( $value ) ) {
+                            $this->attrs[ $key ] = $value;
+                            $description = str_replace( $p, '', $description );
+                        }
+
+                        return;
+                    }
+                    if ( $specs_found ) {
+                        $value = trim( strip_tags( $p ) );
+                        if ( !empty( $value ) ) {
+                            $this->shorts[] = $value;
+                            $description = str_replace( $p, '', $description );
+                        }
+                    }
                 }
-                if ( str_contains( $p, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
-                    $description = str_replace( $p, '', $description );
-                }
-                if ( str_contains( $p, 'Width' ) ) {
-                    $this->dims[ 'x' ] = StringHelper::getFloat( $p );
-                    $description = str_replace( $p, '', $description );
-                }
-            }
-        } );
+            } );
 
         $chip_table = '';
         if ( preg_match( '%chip\s*=\s*({\s*".*?})\s*;%is', $this->body, $match ) ) {
@@ -312,7 +345,7 @@ class Parser extends HtmlParser
         $description = trim( preg_replace( [ '%<h\d+>\s*DESCRIPTION\s*</h\d+>\s*%ui', '%<div>\s*</div>%ui' ], '',
                 $description ) ) . $chip_table;
 
-        return $description ?: $this->getProduct();
+        return FeedHelper::cleanProductDescription( $description ) ?: $this->getProduct();
     }
 
     public function getShortDescription(): array
@@ -365,21 +398,20 @@ class Parser extends HtmlParser
     public function getVideos(): array
     {
         $videos = [];
-        $this->filter( 'div.product_video' )->each( function ( ParserCrawler $c ) use ( &$videos ) {
-            $src = $c->getAttr( 'ifriend', 'src' );
-            if ( !empty( $src ) ) {
-                $url_parts = parse_url( $src );
-                $domain = $url_parts[ 'host' ];
-                if ( str_contains( $domain, '.' ) ) {
-                    $domain = explode( '.', $domain );
-                    $domain = $domain[ count( $domain ) - 2 ];
-                }
-                $name = trim( $c->getText( 'h1' ) ) ?: $this->getProduct();
-                $videos[] = [ 'name' => $name,
-                    'video' => $src,
-                    'provider' => $domain ];
+        preg_match_all( '%<(ifriend|iframe).*?src="(.*?)"%', $this->body, $match, PREG_SET_ORDER );
+        foreach ( $match as $m ) {
+            $url_parts = parse_url( $m[ 2 ] );
+            $domain = $url_parts[ 'host' ];
+            if ( str_contains( $domain, '.' ) ) {
+                $domain = explode( '.', $domain );
+                $domain = $domain[ count( $domain ) - 2 ];
             }
-        } );
+            $name = $this->getProduct();
+
+            $videos[] = [ 'name' => $name,
+                'video' => $m[ 2 ],
+                'provider' => $domain ];
+        }
 
         return $videos;
     }
