@@ -392,7 +392,9 @@ class Parser extends HtmlParser
         $this->filter( 'div.long-description p' )->each( function ( ParserCrawler $c ) use ( &$description ) {
             $p = $c->outerHtml();
             if ( str_contains( $p, '$' ) || str_contains( $p, 'Dimensions:' ) || str_contains( $p, 'Size:' ) || str_contains( $p, 'Measures:' )
-                || str_contains( $p, 'Diameter:' ) || str_contains( $p, 'Outside:' ) || str_contains( $p, 'Inside:' ) || str_contains( $p, 'Depth:' ) ) {
+                || str_contains( $p, 'Diameter:' ) || str_contains( $p, 'Outside:' ) || str_contains( $p, 'Inside:' ) || str_contains( $p, 'Depth:' )
+                || str_contains( $p, 'contact us' ) || str_contains( $p, 'call us' ) || str_contains( $p, 'Fax:' )
+                || str_contains( $p, 'Mail:' ) || preg_match( '%\w+@\w+.\w+%', $p ) ) {
 
                 $description = str_replace( $p, '', $description );
             }
@@ -401,7 +403,8 @@ class Parser extends HtmlParser
             $b = $c->outerHtml();
             if ( str_contains( $b, '$' ) || str_contains( $b, 'Dimensions:' ) || str_contains( $b, 'Size:' )
                 || str_contains( $b, 'Measures:' ) || str_contains( $b, 'Diameter:' ) || str_contains( $b, 'Outside:' )
-                || str_contains( $b, 'Inside:' ) || str_contains( $b, 'Depth:' ) ) {
+                || str_contains( $b, 'Inside:' ) || str_contains( $b, 'Depth:' ) || str_contains( $b, 'contact us' )
+                || str_contains( $b, 'call us' ) || str_contains( $b, 'Fax:' ) || str_contains( $b, 'Mail:' ) || preg_match( '%\w+@\w+.\w+%', $b ) ) {
 
                 $description = str_replace( $b, '', $description );
             }
