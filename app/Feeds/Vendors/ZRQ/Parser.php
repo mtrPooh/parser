@@ -16,6 +16,7 @@ class Parser extends HtmlParser
     private ?float $weight = null;
     private ?float $s_weight = null;
     private string $body = '';
+    private string $descr = '';
 
     private function parseDims( string $text ): void
     {
@@ -163,6 +164,108 @@ class Parser extends HtmlParser
                 $this->weight = FeedHelper::convertLbsFromOz( StringHelper::getFloat( $p ) );
             }
         } );
+
+        // Description
+        $this->descr = $this->getHtml( 'div.description-section' );
+
+        $this->filter( 'ul' )->each( function ( ParserCrawler $c ) {
+            $this->descr = str_ireplace( $c->outerHtml(), '', $this->descr );
+        } );
+
+        $specs_found = false;
+        $this->filter( 'div.description-section p' )->each( function ( ParserCrawler $c ) use ( &$specs_found ) {
+
+            $p = $c->outerHtml();
+
+            preg_match_all( '%br>([\w]+.*?:.*?)<%', $p, $match );
+            if ( !empty( $match[ 1 ] ) ) {
+                foreach ( $match[ 1 ] as $data ) {
+                    $d = explode( ':', $data );
+
+                    $key = trim( strip_tags( $d[ 0 ] ) );
+                    $value = trim( strip_tags( $d[ 1 ] ) );
+
+                    if ( str_contains( $key, 'Description' ) ) {
+                        $this->descr = str_replace( $data, '', $this->descr );
+                        continue;
+                    }
+                    if ( str_contains( $key, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
+                        $this->descr = str_replace( $data, '', $this->descr );
+                        continue;
+                    }
+                    if ( str_contains( $key, 'Width' ) ) {
+                        $this->dims[ 'x' ] = StringHelper::getFloat( $value );
+                        $this->descr = str_replace( $data, '', $this->descr );
+                        continue;
+                    }
+                    if ( !empty( $key ) && !empty( $value ) ) {
+                        $this->attrs[ $key ] = $value;
+                        $this->descr = str_replace( $data, '', $this->descr );
+                    }
+                }
+            }
+            else {
+                if ( str_contains( $p, 'Specification' ) ) {
+                    $specs_found = true;
+                    $this->descr = str_replace( $p, '', $this->descr );
+                    return;
+                }
+                if ( str_contains( $p, '$' ) || str_contains( $p, 'Part Number' ) || str_contains( $p, 'Product Name' )
+                    || str_contains( $p, 'Description' ) || str_contains( $p, 'Specification' ) ) {
+
+                    $this->descr = str_replace( $p, '', $this->descr );
+                    return;
+                }
+
+                if ( str_contains( $p, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
+                    $this->descr = str_replace( $p, '', $this->descr );
+                    return;
+                }
+                if ( str_contains( $p, 'Width' ) ) {
+                    $this->dims[ 'x' ] = StringHelper::getFloat( $p );
+                    $this->descr = str_replace( $p, '', $this->descr );
+                    return;
+                }
+                if ( $specs_found && str_contains( $p, ':' ) ) {
+                    $d = explode( ':', $p );
+
+                    $key = trim( strip_tags( $d[ 0 ] ) );
+                    $value = trim( strip_tags( $d[ 1 ] ) );
+
+                    if ( !empty( $key ) && !empty( $value ) ) {
+                        $this->attrs[ $key ] = $value;
+                        $this->descr = str_replace( $p, '', $this->descr );
+                    }
+
+                    return;
+                }
+                if ( $specs_found ) {
+                    $value = trim( strip_tags( $p ) );
+                    if ( !empty( $value ) ) {
+                        $this->shorts[] = $value;
+                        $this->descr = str_replace( $p, '', $this->descr );
+                    }
+                }
+            }
+        } );
+
+        $chip_table = '';
+        if ( preg_match( '%chip\s*=\s*({\s*".*?})\s*;%is', $this->body, $match ) ) {
+
+            preg_match_all( '%"([\$\d.,]+)".*?quantity:\s*([\d]+)%', $match[ 1 ], $chips, PREG_SET_ORDER );
+
+            $chip_table = '<table><tr><th colspan="2">Casino Chip Set</th></tr>';
+            $chip_table .= '<tr><th>Chip Quantity</th><th>Chip Nominal Value</th></tr>';
+
+            foreach ( $chips as $chip ) {
+                $chip_table .= '<tr><td>' . $chip[ 2 ] . '</td><td>' . $chip[ 1 ] . '</td></tr>';
+            }
+
+            $chip_table .= '</table>';
+        }
+
+        $this->descr = trim( preg_replace( [ '%<h\d+>\s*DESCRIPTION\s*</h\d+>\s*%ui', '%<div>\s*</div>%ui' ], '',
+                $this->descr ) ) . $chip_table;
     }
 
     public function getMpn(): string
@@ -230,122 +333,7 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        $description = $this->getHtml( 'div.description-section' );
-
-        $this->filter( 'ul' )->each( function ( ParserCrawler $c ) use ( &$description ) {
-            $description = str_ireplace( $c->outerHtml(), '', $description );
-        } );
-
-        $specs_found = false;
-        $this->filter( 'div.description-section p' )
-            ->each( function ( ParserCrawler $c ) use ( &$description, &$specs_found ) {
-
-                $p = $c->outerHtml();
-
-                preg_match_all( '%br>([\w]+.*?:.*?)<%', $p, $match );
-                if ( !empty( $match[ 1 ] ) ) {
-                    foreach ( $match[ 1 ] as $data ) {
-                        $d = explode( ':', $data );
-
-                        $key = trim( strip_tags( $d[ 0 ] ) );
-                        $value = trim( strip_tags( $d[ 1 ] ) );
-
-                        if ( str_contains( $key, 'Description' ) ) {
-                            $description = str_replace( $data, '', $description );
-                            continue;
-                        }
-                        if ( str_contains( $key, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
-                            $description = str_replace( $data, '', $description );
-                            continue;
-                        }
-                        if ( str_contains( $key, 'Width' ) ) {
-                            $this->dims[ 'x' ] = StringHelper::getFloat( $value );
-                            $description = str_replace( $data, '', $description );
-                            continue;
-                        }
-                        if ( !empty( $key ) && !empty( $value ) ) {
-                            $this->attrs[ $key ] = $value;
-                            $description = str_replace( $data, '', $description );
-                        }
-                    }
-                }
-                else {
-                    if ( str_contains( $p, 'Specification' ) ) {
-                        $specs_found = true;
-                        $description = str_replace( $p, '', $description );
-                        return;
-                    }
-                    if ( str_contains( $p, '$' ) || str_contains( $p, 'Part Number' ) || str_contains( $p, 'Product Name' )
-                        || str_contains( $p, 'Description' ) || str_contains( $p, 'Specification' ) ) {
-
-                        $description = str_replace( $p, '', $description );
-                        return;
-                    }
-
-                    if ( str_contains( $p, 'Weigh' ) && str_contains( $p, 'oz' ) ) {
-                        $description = str_replace( $p, '', $description );
-                        return;
-                    }
-                    if ( str_contains( $p, 'Width' ) ) {
-                        $this->dims[ 'x' ] = StringHelper::getFloat( $p );
-                        $description = str_replace( $p, '', $description );
-                        return;
-                    }
-                    if ( $specs_found && str_contains( $p, ':' ) ) {
-                        $d = explode( ':', $p );
-
-                        $key = trim( strip_tags( $d[ 0 ] ) );
-                        $value = trim( strip_tags( $d[ 1 ] ) );
-
-                        if ( !empty( $key ) && !empty( $value ) ) {
-                            $this->attrs[ $key ] = $value;
-                            $description = str_replace( $p, '', $description );
-                        }
-
-                        return;
-                    }
-                    if ( $specs_found ) {
-                        $value = trim( strip_tags( $p ) );
-                        if ( !empty( $value ) ) {
-                            $this->shorts[] = $value;
-                            $description = str_replace( $p, '', $description );
-                        }
-                    }
-                }
-            } );
-
-        $chip_table = '';
-        if ( preg_match( '%chip\s*=\s*({\s*".*?})\s*;%is', $this->body, $match ) ) {
-
-            preg_match_all( '%"([\$\d.,]+)".*?quantity:\s*([\d]+)%', $match[ 1 ], $chips, PREG_SET_ORDER );
-
-            $row = [];
-            $col = 0;
-            foreach ( $chips as $chip ) {
-                $col++;
-                $row[] = '<td>' . $chip[ 1 ] . '<br>' . $chip[ 2 ] . '</td>';
-                if ( $col === 3 ) {
-                    $chip_table .= '<tr>' . implode( '', $row ) . '</tr>';
-                    $row = [];
-                    $col = 0;
-                }
-            }
-
-            if ( !empty( $row ) ) {
-                $last_row = '';
-                for ( $i = 0; $i < 3; $i++ ) {
-                    $last_row .= $row[ $i ] ?? '<td></td>';
-                }
-                $chip_table .= '<tr>' . $last_row . '</tr>';
-            }
-
-            $chip_table = '<table>' . $chip_table . '</table>';
-        }
-
-        $description = trim( preg_replace( [ '%<h\d+>\s*DESCRIPTION\s*</h\d+>\s*%ui', '%<div>\s*</div>%ui' ], '',
-                $description ) ) . $chip_table;
-
-        return FeedHelper::cleanProductDescription( $description ) ?: $this->getProduct();
+        return FeedHelper::cleanProductDescription( $this->descr ) ?: $this->getProduct();
     }
 
     public function getShortDescription(): array
