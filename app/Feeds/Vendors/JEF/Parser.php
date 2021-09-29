@@ -394,7 +394,7 @@ class Parser extends HtmlParser
             if ( str_contains( $p, '$' ) || str_contains( $p, 'Dimensions:' ) || str_contains( $p, 'Size:' ) || str_contains( $p, 'Measures:' )
                 || str_contains( $p, 'Diameter:' ) || str_contains( $p, 'Outside:' ) || str_contains( $p, 'Inside:' ) || str_contains( $p, 'Depth:' )
                 || str_contains( $p, 'contact us' ) || str_contains( $p, 'call us' ) || str_contains( $p, 'Fax:' )
-                || str_contains( $p, 'Mail:' ) || preg_match( '%\w+@\w+.\w+%', $p ) ) {
+                || str_contains( $p, 'Mail:' ) || str_contains( $p, 'to contact' ) || preg_match( '%\w+@\w+.\w+%', $p ) ) {
 
                 $description = str_replace( $p, '', $description );
             }
