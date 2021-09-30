@@ -442,7 +442,7 @@ class Parser extends HtmlParser
         $description = preg_replace( '%<p>Benefits:</p>\s*<ul.*?</ul>%uis', '', $description );
         $description = preg_replace( '%>[<h\w+>bp\s]*Features:[</h\d+>brp\s]*<ul>(.*?)</ul>%uis', '>', $description );
         $description = preg_replace( '%([<h\w+>bp\s]*)NOTE:[</h\d+>brp\s]*.*?\$.*?<%uis', '$1<', $description );
-        $description = preg_replace( '%(<ul>|<li>).*?</ul>%uis', '', $description );
+        $description = preg_replace( [ '%(<ul>|<li>).*?</ul>%uis', '%<h\d+.*?</h\d+>[<br>\s]*$%' ], '', $description );
 
         return trim( $description );
     }
