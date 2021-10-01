@@ -13,7 +13,20 @@ class Parser extends HtmlParser
     private array $shorts = [];
     private ?array $attrs = null;
     private ?float $weight = null;
-    private string $descr = '';
+    private string $desc = '';
+
+    private function parseVideo( string $src ): array
+    {
+        $url_parts = parse_url( $src );
+        $domain = $url_parts[ 'host' ];
+        if ( str_contains( $domain, '.' ) ) {
+            $domain = explode( '.', $domain );
+            $domain = $domain[ count( $domain ) - 2 ];
+        }
+        return [ 'name' => $this->getProduct(),
+            'video' => $src,
+            'provider' => $domain ];
+    }
 
     public function parseContent( $data, $params = [] ): array
     {
@@ -26,40 +39,52 @@ class Parser extends HtmlParser
 
     public function beforeParse(): void
     {
-        $this->descr = $this->getHtml( 'div[itemprop="description"]' );
+        $this->desc = $this->getHtml( 'div[itemprop="description"]' );
 
         $this->filter( 'div[itemprop="description"] p' )->each( function ( ParserCrawler $c ) {
             $p = trim( $c->getText( 'p' ), '  ' );
             if ( $p === 'Product Features:' || $p === 'Overview:' || $p === 'Includes:' || $p === 'Package Includes'
                 || $p === 'Package Includes:' || $p === 'Features' || str_contains( $p, '$' ) ) {
 
-                $this->descr = str_replace( $c->outerHtml(), '', $this->descr );
+                $this->desc = str_replace( $c->outerHtml(), '', $this->desc );
             }
         } );
 
         $this->filter( 'div[itemprop="description"] span' )->each( function ( ParserCrawler $c ) {
             $p = trim( $c->getText( 'span' ), '  ' );
             if ( str_contains( $p, '$' ) ) {
-                $this->descr = str_replace( $c->outerHtml(), '', $this->descr );
+                $this->desc = str_replace( $c->outerHtml(), '', $this->desc );
             }
         } );
 
         $this->filter( 'div[itemprop="description"] div' )->each( function ( ParserCrawler $c ) {
             $p = trim( $c->getText( 'div' ), '  ' );
             if ( str_contains( $p, '$' ) ) {
-                $this->descr = str_replace( $c->outerHtml(), '', $this->descr );
+                $this->desc = str_replace( $c->outerHtml(), '', $this->desc );
             }
         } );
 
-        if ( str_contains( $this->descr, '$' ) ) {
-            $this->descr = '';
+        if ( str_contains( $this->desc, '$' ) ) {
+            $this->desc = '';
         }
 
-        if ( str_contains( $this->descr, '<div class="productView-productTabs"' ) ) {
-            $this->descr = substr( $this->descr, 0, strpos( $this->descr, '<div class="productView-productTabs"' ) );
+        if ( str_contains( $this->desc, '<!-- snippet location product_description' ) ) {
+            $this->desc = substr( $this->desc, 0, strpos( $this->desc, '<!-- snippet location product_description' ) );
         }
 
-        if ( preg_match_all( '%<ul(.*?)</ul>%uis', $this->descr, $matches, PREG_SET_ORDER ) ) {
+        if ( str_contains( $this->desc, '<div class="tab-content" id="tab-warranty"' ) ) {
+            $this->desc = substr( $this->desc, 0, strpos( $this->desc, '<div class="tab-content" id="tab-warranty"' ) );
+        }
+
+        if ( str_contains( $this->desc, '<div class="tab-content" id="tab-addition"' ) ) {
+            $this->desc = substr( $this->desc, 0, strpos( $this->desc, '<div class="tab-content" id="tab-addition"' ) );
+        }
+
+        if ( str_contains( $this->desc, '<div class="productView-productTabs"' ) ) {
+            $this->desc = substr( $this->desc, 0, strpos( $this->desc, '<div class="productView-productTabs"' ) );
+        }
+
+        if ( preg_match_all( '%<ul(.*?)</ul>%uis', $this->desc, $matches, PREG_SET_ORDER ) ) {
 
             foreach ( $matches as $ul ) {
 
@@ -95,12 +120,13 @@ class Parser extends HtmlParser
                         $this->shorts[] = trim( $li );
                     }
 
-                    $this->descr = str_replace( $ul[ 0 ], '##del##', $this->descr );
+                    $this->desc = str_replace( $ul[ 0 ], '##del##', $this->desc );
                 }
             }
 
-            $this->descr = preg_replace( '%<h\d+<\w>]+(Spec|Featur|Dimension).*?</h\d+>\s*##del##%', '', $this->descr );
-            $this->descr = str_replace( '##del##', '', $this->descr );
+            $this->desc = preg_replace( '%[<h\w>]+(Spec|Featur|Dimension).*?</h\d+>\s*##del##%', '', $this->desc );
+            $this->desc = str_replace( '##del##', '', $this->desc );
+            $this->desc = preg_replace( '%<h\d+>' . $this->getProduct() . '</h\d+>%ui', '', $this->desc );
         }
     }
 
@@ -163,7 +189,7 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        return FeedHelper::cleanProductDescription( $this->descr ) ?: $this->getProduct();
+        return FeedHelper::cleanProductDescription( $this->desc ) ?: $this->getProduct();
     }
 
     public function getShortDescription(): array
@@ -189,9 +215,9 @@ class Parser extends HtmlParser
             if ( !str_contains( $file, 'http' ) ) {
                 $file = 'https://www.affinitechstore.com/' . ltrim( $file, '/' );
             }
-            $files[] = [ 'name' => $name, 'link' => $file ];
+            $files[] = [ 'name' => $name, 'link' => trim( $file ) ];
         } );
-
+        
         return $files;
     }
 
@@ -199,17 +225,15 @@ class Parser extends HtmlParser
     {
         $videos = [];
         $this->filter( 'div[itemprop="description"] iframe' )->each( function ( ParserCrawler $c ) use ( &$videos ) {
-            $src = $c->getAttr( 'iframe', 'src' );
+            $src = $c->getAttr( 'iframe', 'src' ) ?: $c->getAttr( 'iframe', 'data-src' );
             if ( !empty( $src ) ) {
-                $url_parts = parse_url( $src );
-                $domain = $url_parts[ 'host' ];
-                if ( str_contains( $domain, '.' ) ) {
-                    $domain = explode( '.', $domain );
-                    $domain = $domain[ count( $domain ) - 2 ];
-                }
-                $videos[] = [ 'name' => $this->getProduct(),
-                    'video' => $src,
-                    'provider' => $domain ];
+                $videos[] = $this->parseVideo( $src );
+            }
+        } );
+        $this->filter( 'div#videoGallery-content iframe' )->each( function ( ParserCrawler $c ) use ( &$videos ) {
+            $src = $c->getAttr( 'iframe', 'src' ) ?: $c->getAttr( 'iframe', 'data-src' );
+            if ( !empty( $src ) ) {
+                $videos[] = $this->parseVideo( $src );
             }
         } );
 
