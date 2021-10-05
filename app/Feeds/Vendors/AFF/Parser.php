@@ -24,7 +24,7 @@ class Parser extends HtmlParser
             $domain = $domain[ count( $domain ) - 2 ];
         }
         return [ 'name' => $this->getProduct(),
-            'video' => $src,
+            'video' => str_contains( $src, 'http' ) ?: 'https:' . $src,
             'provider' => $domain ];
     }
 
@@ -124,7 +124,7 @@ class Parser extends HtmlParser
                 }
             }
 
-            $this->desc = preg_replace( '%[<h\w>]+(Spec|Featur|Dimension).*?</h\d+>\s*##del##%', '', $this->desc );
+            $this->desc = preg_replace( '%[<h\w>]+(Spec|Featur|Dimension|Addition).*?</h\d+>\s*##del##%', '', $this->desc );
             $this->desc = str_replace( '##del##', '', $this->desc );
             $this->desc = preg_replace( '%<h\d+>' . $this->getProduct() . '</h\d+>%ui', '', $this->desc );
         }
@@ -184,7 +184,16 @@ class Parser extends HtmlParser
         $categories = $this->getContent( 'ul.breadcrumbs li a' );
         array_shift( $categories );
 
+        if ( $categories[ count( $categories ) - 1 ] === $this->getProduct() ) {
+            unset( $categories[ count( $categories ) - 1 ] );
+        }
+
         return $categories;
+    }
+
+    public function getBrand(): ?string
+    {
+        return $this->getText( '*[itemprop="brand"]' ) ?: null;
     }
 
     public function getDescription(): string
@@ -217,7 +226,7 @@ class Parser extends HtmlParser
             }
             $files[] = [ 'name' => $name, 'link' => trim( $file ) ];
         } );
-        
+
         return $files;
     }
 
