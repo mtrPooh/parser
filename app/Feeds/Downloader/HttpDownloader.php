@@ -12,65 +12,89 @@ use Exception;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Pool;
 use GuzzleHttp\Psr7\Response;
+use JetBrains\PhpStorm\ArrayShape;
+use JetBrains\PhpStorm\Pure;
 
 class HttpDownloader
 {
     /**
-     * @var HttpClient Async HTTP client
+     * @var HttpClient Асинхронный HTTP клиент
      */
     private HttpClient $client;
     /**
-     * @var bool Defines how to use the user agent, change it on each request, or use a static value
+     * Использовать статичный user-agent или динамичный (изменять его значение при каждом запросе)
+     * По умолчанию user-agent меняется при каждом запросе
+     * @var bool
      */
     private bool $static_user_agent;
     /**
-     * @var string Current user agent
-     */
-    private string $user_agent;
-    /**
-     * @var float Waiting time between sending a request
-     */
-    private float $delay_s;
-    /**
-     * @var array Parameters for authorization
-     *
-     * 'check_login_text' = > 'Log Out' is a verification word that is displayed only to authorized users (Log Out, My account, and others).
-     * 'auth_url' = > 'https://www.authorise_uri.com/login' - The URL to which the authorization request is sent.
-     * 'auth_form_url' = > 'https://www.authorise_uri.com/login' - The URL of the page where the authorization form is located.
-     * 'auth_info' = > [] - An array of parameters for authorization, contains all the fields that were sent by the browser for authorization
-     * 'find_fields_form' = > true|false-Determines whether to search for additional fields of the authorization form before sending the request or not
-     * If this parameter is omitted, the system will consider its value as " true"
-     * 'api_auth' = > true|false-Specifies in what form to send the authorization form parameters ("request_payload" or "form_data")
-     * If this parameter is omitted, the system will consider its value as "false".
-     * By default, the parameters are sent as normal form fields
-     *
-     * Example of the auth_info content:
-     * 'auth_info' = > [
-     * 'login[username]' => 'login',
-     * 'login[password]' => 'password',
-     * ],
-     * The values of 'login' and 'password' are automatically replaced with the current login and password for authorization on the site
-     * This is done to automatically update the data when they change
-     */
-    private array $params;
-    /**
-     * @var bool Determines whether to use a proxy or not
+     * Использовать прокси или нет
+     * По умолчанию прокси не используется
+     * @var bool
      */
     private bool $use_proxy;
     /**
-     * @var bool Determines whether the connection to the proxy server is established or not
+     * @var bool Установлено соединение с прокси сервером или нет
      */
     private bool $connect = false;
     /**
-     * @var bool Flag that is responsible for additional processing of links that have errors when loading
-     * By default, links with an error are processed
+     * Отвечает за дополнительную обработку ссылок, при загрузке которых произошли ошибки
+     * По умолчанию, ссылки с ошибкой обрабатываются
+     * @var bool
      */
     private bool $process_errors_links = true;
     /**
-     * @var int Defines the waiting time for processing the request in seconds
+     * @var bool Установлена авторизация в объекте или нет
+     */
+    private bool $authorise = false;
+    /**
+     * @var string Текущий user agent
+     */
+    private string $user_agent;
+    /**
+     * @var int Время ожидания обработки запроса в секундах
      */
     public int $timeout_s;
+    /**
+     * @var int Количество попыток подключения к прокси серверу
+     */
+    private int $connect_limit = 50;
+    /**
+     * @var float Время ожидания между отправкой запроса
+     */
+    private float $delay_s;
+    /**
+     * @var array Параметры для авторизации
+     *
+     * 'check_login_text' => 'Log Out' - Проверочное слово, которое отображается только авторизованным пользователям (Log Out, My account и прочие).
+     * 'auth_url' => 'https://www.authorise_uri.com/login' - Url адрес на который отправляется запрос для авторизации.
+     * 'auth_form_url' => 'https://www.authorise_uri.com/login' - Url адрес страницы, на которой находится форма авторизации.
+     * 'auth_info' => [] - Массив параметров для авторизации, содержит в себе все поля, которые были отправлены браузером для авторизации
+     * 'find_fields_form' => true|false - Определяет искать дополнительные поля формы авторизации перед отправкой запроса или нет
+     * Если этот параметр будет опущен, система сочтет его значение как "true"
+     * 'api_auth' => true|false - Указывает в каком виде отправлять параметры формы авторизации ("request_payload" или "form_data")
+     * Если этот параметр будет опущен, система сочтет его значение как "false".
+     * По умолчанию параметры отправляются, как обычные поля формы
+     *
+     * Пример содержания auth_info:
+     * 'auth_info' => [
+     *     'login[username]' => 'login',
+     *     'login[password]' => 'password',
+     * ]
+     * Значения 'login' и 'password' автоматически заменяются актуальными логином и паролем для авторизации на сайте
+     * Это сделано для автоматического обновления данных при их изменении
+     */
+    private array $params;
 
+    /**
+     * @param array $headers Пользовательский набор заголовков
+     * @param array $params Параметры авторизации
+     * @param float $timeout_s Время ожидания ответа на запрос
+     * @param float $delay_s Время ожидания между запросами
+     * @param bool $static_user_agent Использовать статичный user-agent или нет
+     * @param bool $use_proxy Использовать прокси или нет
+     * @param string $source Ссылка на сайт
+     */
     public function __construct( array $headers = [], array $params = [], float $timeout_s = 15, float $delay_s = 0, bool $static_user_agent = false, bool $use_proxy = false, string $source = 'https://google.com' )
     {
         $this->timeout_s = $timeout_s;
@@ -82,15 +106,31 @@ class HttpDownloader
         $this->setStaticUserAgent( $static_user_agent );
         $this->setUserAgent( HttpHelper::getUserAgent() );
 
-        $this->client = new HttpClient( $source );
-        $this->client->setHeaders( $headers );
+        $this->setClient( new HttpClient( $source ) );
+        $this->setHeaders( $headers );
         $this->setTimeOut( $this->timeout_s );
 
         $this->processAuth();
     }
 
     /**
-     * @param bool $static_agent Sets whether to use a static user-agent or not
+     * @return void Устанавливает объект асинхронного http клиента
+     */
+    public function setClient( HttpClient $client ): void
+    {
+        $this->client = $client;
+    }
+
+    /**
+     * @return HttpClient Возвращает объект асинхронного http клиента
+     */
+    public function getClient(): HttpClient
+    {
+        return $this->client;
+    }
+
+    /**
+     * @param bool $static_agent Устанавливает использовать статичный user-agent или нет
      */
     public function setStaticUserAgent( bool $static_agent ): void
     {
@@ -106,31 +146,7 @@ class HttpDownloader
     }
 
     /**
-     * @param string $user_agent Sets the user-agent value
-     */
-    public function setUserAgent( string $user_agent ): void
-    {
-        $this->user_agent = $user_agent;
-    }
-
-    /**
-     * @param float $timeout Sets the waiting time for a response to a request
-     */
-    public function setTimeOut( float $timeout ): void
-    {
-        $this->getClient()->setRequestTimeOut( $timeout * 1000 );
-    }
-
-    /**
-     * @param float $delay Sets the delay between requests
-     */
-    public function setDelay( float $delay ): void
-    {
-        $this->delay_s = $delay * 1000000;
-    }
-
-    /**
-     * @param bool $use_proxy Sets whether to use a proxy or not
+     * @param bool $use_proxy Устанавливает использовать прокси или нет
      */
     public function setUseProxy( bool $use_proxy ): void
     {
@@ -138,7 +154,40 @@ class HttpDownloader
     }
 
     /**
-     * @param array $params Sets the authorization parameters
+     * @param string $user_agent Устанавливает значение user-agent
+     */
+    public function setUserAgent( string $user_agent ): void
+    {
+        $this->user_agent = $user_agent;
+    }
+
+    /**
+     * @param float $timeout Устанавливает время ожидания отклика на запрос
+     */
+    public function setTimeOut( float $timeout ): void
+    {
+        $this->getClient()->setRequestTimeOut( $timeout * 1000 );
+    }
+
+    /**
+     * Устанавливает лимит попыток подключения к прокси серверу
+     * @param int $limit
+     */
+    public function setConnectLimit( int $limit ): void
+    {
+        $this->connect_limit = $limit;
+    }
+
+    /**
+     * @param float $delay Устанавливает задержку между запросами
+     */
+    public function setDelay( float $delay ): void
+    {
+        $this->delay_s = $delay * 1000000;
+    }
+
+    /**
+     * @param array $params Устанавливает параметры авторизации
      */
     public function setParams( array $params ): void
     {
@@ -146,52 +195,59 @@ class HttpDownloader
     }
 
     /**
-     * Sending multiple requests async
-     * @param array $links An array of references or an array of objects app/Feeds/Utils/Link
-     * @param bool $assoc Specifies in what form to return an array of responses to requests
-     * A normal array, where the key is the address of the link to which the request was sent, and the value is the content of the response to the request
-     * An associative array, of the form:
-     * 'data' => new Data() - The content of the response to the request
-     * 'link' => [
-     *     'url' => $link->getUrl() - The address of the link to which the request was sent
-     *     'params' => $link->getParams() - Array of request parameters
-     * ]
-     * @return array An array of responses to requests, each response is placed in an object app/Feeds/Utils/Data
+     * Асинхронная отправка нескольких запросов
+     * @param array $links Принимается массив ссылок или массив объектов app/Feeds/Utils/Link
+     * @return Data[] Массив ответов на запросы, каждый ответ помещен в объект app/Feeds/Utils/Data
      */
-    public function fetch( array $links, bool $assoc = false ): array
+    public function fetch( array $links ): array
     {
         $data = [];
         $errors_links = [];
 
-        $requests = function ( $links ) use ( &$data, &$errors_links, $assoc ) {
+        $requests = function ( $links ) use ( &$data, &$errors_links ) {
             foreach ( $links as $link ) {
+                /** Если ссылка не помещена в экземпляр класса app/Feeds/Utils/Link -
+                 * создаем новый экземпляр класса и передаем в него ссылку
+                 */
                 if ( !$link instanceof Link ) {
                     $link = new Link( $link );
                 }
 
+                /** Если необходимо использовать прокси для загрузки ссылок и при этом не установлено соединение с прокси сервером - инициируем соединение **/
                 if ( $this->use_proxy && !$this->connect ) {
                     print PHP_EOL . 'Check proxies' . PHP_EOL;
                     $this->initProxy( $link );
                 }
 
+                /** Используем статичный user-agent **/
                 if ( $this->static_user_agent ) {
                     $this->setHeader( 'User-Agent', $this->user_agent );
                 }
+                /** Используем динамичный user-agent **/
                 else {
                     $this->setHeader( 'User-Agent', HttpHelper::getUserAgent() );
                 }
 
-                yield function () use ( $link, &$data, &$errors_links, $assoc ) {
+                yield function () use ( $link, &$data, &$errors_links ) {
                     return $this->getClient()->request( $link->getUrl(), $link->getParams(), $link->getMethod(), $link->getTypeParams() )->
                     then(
-                        function ( Response $response ) use ( $link, &$data, $assoc ) {
+                    /** Анонимная функция для обработки успешного ответа на отправленный Http запрос **/
+                        function ( Response $response ) use ( $link, &$data ) {
                             $this->getClient()->setResponse( $response );
                             if ( $body = $response->getBody() ) {
                                 $response_body = new Data( $body->getContents() );
                             }
-                            $data = $this->prepareRequestData( $response_body ?? null, $link, $assoc, $data );
+                            $data = $this->prepareRequestData( $response_body ?? null, $link, $data );
                         },
-                        function ( RequestException $exception ) use ( $link, &$data, &$errors_links, $assoc ) {
+                        /** Анонимная функция для обработки ошибки **/
+                        function ( RequestException $exception ) use ( $link, &$data, &$errors_links ) {
+                            /**
+                             * Если используется прокси, сбрасываем подключение и формируем массив повторной загрузки ссылок
+                             * когда код ответа от сервера равен 403 или 430 (код ответа от Shopify), или если произошла ошибка при отправке http запроса
+                             *
+                             * Если включена обработка ссылок, при загрузке которых произошла ошибка,
+                             * формируем массив для повторной загрузки, если код ответа не равен 404 и если при отправке http запроса не произошло ошибок
+                             */
                             if ( $response = $exception->getResponse() ) {
                                 $status = $response->getStatusCode();
                                 if ( $status === 403 || $status === 430 ) {
@@ -205,11 +261,11 @@ class HttpDownloader
                                     $errors_links[] = $this->prepareErrorLinks( $link, 0 );
                                 }
                                 elseif ( in_array( $status, [ 200, 404 ] ) ) {
-                                    $data = $this->prepareRequestData( new Data( $response->getBody()->getContents(), $status ), $link, $assoc, $data );
+                                    $data = $this->prepareRequestData( new Data( $response->getBody()->getContents(), $status ), $link, $data );
                                 }
                                 else {
                                     $this->printParseError( $link, $exception );
-                                    $data = $this->prepareRequestData( new Data( $response->getBody()->getContents(), $status ), $link, $assoc, $data );
+                                    $data = $this->prepareRequestData( new Data( $response->getBody()->getContents(), $status ), $link, $data );
                                 }
                             }
                             else if ( $this->use_proxy ) {
@@ -218,7 +274,7 @@ class HttpDownloader
                             }
                             else {
                                 $this->printParseError( $link, $exception );
-                                $data = $this->prepareRequestData( null, $link, $assoc, $data );
+                                $data = $this->prepareRequestData( null, $link, $data );
                             }
                         }
                     );
@@ -231,31 +287,32 @@ class HttpDownloader
         $promise->wait();
 
         if ( $errors_links ) {
-            $data = array_merge( $data, $this->processErrorLinks( $errors_links, $assoc ) );
+            $data = array_merge( $data, $this->processErrorLinks( $errors_links ) );
         }
         return $data;
     }
 
     /**
-     * Attempt to load links with 403 or 503 errors during loading
-     * @param array $errors_links Array of the form ['link' => Link, 'delay' => delay_s]
-     * @param bool $assoc In what form to return an array of responses to requests
-     * @return array Array of responses to requests
+     * Попытка загрузить ссылки, при загрузке которых произошли 403 или 503 ошибки
+     * @param array $errors_links Массив вида ['link' => Link, 'delay' => delay_s]
+     * @return Data[] Массив ответов на запросы
      */
-    private function processErrorLinks( array $errors_links, bool $assoc ): array
+    private function processErrorLinks( array $errors_links ): array
     {
         $data = [];
         foreach ( $errors_links as $error_link ) {
             $link = $error_link[ 'link' ];
 
+            /** Используем статичный user-agent **/
             if ( $this->static_user_agent ) {
                 $this->setHeader( 'User-Agent', $this->user_agent );
             }
+            /** Используем динамичный user-agent **/
             else {
                 $this->setHeader( 'User-Agent', HttpHelper::getUserAgent() );
             }
 
-            for ( $i = 1; $i <= 5; $i++ ) {
+            for ( $i = 1; $i <= 3; $i++ ) {
                 if ( $this->use_proxy && !$this->connect ) {
                     print PHP_EOL . 'Check proxies' . PHP_EOL;
                     $this->initProxy( $link );
@@ -286,7 +343,7 @@ class HttpDownloader
             }
 
             if ( !isset( $response_body ) && isset( $exception ) && $response = $exception->getResponse() ) {
-                $response_body = new Data( $response->getBody()->getContents() );
+                $response_body = new Data( $response->getBody()->getContents(), $response->getStatusCode() );
             }
 
             if ( isset( $exception ) && $exception ) {
@@ -295,16 +352,16 @@ class HttpDownloader
                 }
                 $this->printParseError( $link, $exception );
             }
-            $data = $this->prepareRequestData( $response_body ?? null, $link, $assoc, $data );
+            $data = $this->prepareRequestData( $response_body ?? null, $link, $data );
         }
         return $data;
     }
 
     /**
-     * Sends a single request using the GET method
-     * @param string|Link $link A link or an app/Feeds/Utils/Link object is accepted
-     * @param array $params Array of parameters to be converted to a query string
-     * @return Data Object app/Feeds/Utils/Data which contains the response to the request
+     * Посылает одиночный запрос методом GET
+     * @param string|Link $link Принимается ссылка или объект app/Feeds/Utils/Link
+     * @param array $params Массив параметров, которые будут преобразованы в query string
+     * @return Data Объект app/Feeds/Utils/Data который содержит ответ на запрос
      */
     public function get( string|Link $link, array $params = [] ): Data
     {
@@ -316,11 +373,11 @@ class HttpDownloader
     }
 
     /**
-     * Sends a single request using the POST method
-     * @param string|Link $link A link or an app/Feeds/Utils/Link object is accepted
-     * @param array $params Array of parameters
-     * @param string $type_params The type of sending request parameters - as the body of the html form or as a json string (the body of the API request)
-     * @return Data The app/Feeds/Utils/Data object that contains the response to the request
+     * Посылает одиночный запрос методом POST
+     * @param string|Link $link Принимается ссылка или объект app/Feeds/Utils/Link
+     * @param array $params Массив параметров
+     * @param string $type_params Тип отправки параметров запроса - как тело html формы или как json строка (тело API запроса)
+     * @return Data Объект app/Feeds/Utils/Data который содержит ответ на запрос
      */
     public function post( string|Link $link, array $params = [], string $type_params = 'form_data' ): Data
     {
@@ -333,17 +390,9 @@ class HttpDownloader
     }
 
     /**
-     * @return HttpClient Returns an object of an asynchronous http client
-     */
-    public function getClient(): HttpClient
-    {
-        return $this->client;
-    }
-
-    /**
-     * Sets the http request header
-     * @param string $name Title name
-     * @param string $value Header value
+     * Устанавливает заголовок http запроса
+     * @param string $name Название заголовка
+     * @param string $value Значение заголовка
      */
     public function setHeader( string $name, string $value ): void
     {
@@ -351,7 +400,7 @@ class HttpDownloader
     }
 
     /**
-     * @param array $headers Sets a set of http request headers
+     * @param array $headers Устанавливает набор заголовков http запроса
      */
     public function setHeaders( array $headers ): void
     {
@@ -359,9 +408,9 @@ class HttpDownloader
     }
 
     /**
-     * Returns the value of the specified header
-     * @param string $name Title name
-     * @return string|null Header value
+     * Возвращает значение указанного заголовка
+     * @param string $name Название заголовка
+     * @return string|null Значение заголовка
      */
     public function getHeader( string $name ): ?string
     {
@@ -369,16 +418,16 @@ class HttpDownloader
     }
 
     /**
-     * @return array Returns an array of headers
+     * @return array Возвращает массив заголовков
      */
-    public function getHeaders(): array
+    #[Pure] public function getHeaders(): array
     {
         return $this->getClient()->getHeaders();
     }
 
     /**
-     * Deletes the title by its name
-     * @param string $name Title name
+     * Удаляет заголовок по его названию
+     * @param string $name Название заголовка
      */
     public function removeHeader( string $name ): void
     {
@@ -386,7 +435,7 @@ class HttpDownloader
     }
 
     /**
-     * Removes all headers
+     * Удаляет все заголовки
      */
     public function removeHeaders(): void
     {
@@ -394,9 +443,9 @@ class HttpDownloader
     }
 
     /**
-     * Sets a new cookie
-     * @param string $name Cookie name
-     * @param string $value Cookie value
+     * Устанавливает новую cookie
+     * @param string $name Название cookie
+     * @param string $value Значение cookie
      */
     public function setCookie( string $name, string $value ): void
     {
@@ -408,9 +457,9 @@ class HttpDownloader
     }
 
     /**
-     * Returns the value of the specified cookie
-     * @param string $name Cookie name
-     * @return string Cookie value
+     * Возвращает значение указанной cookie
+     * @param string $name Название cookie
+     * @return string Значение cookie
      */
     public function getCookie( string $name ): string
     {
@@ -418,11 +467,11 @@ class HttpDownloader
     }
 
     /**
-     * Returns an array containing an associative array with information about all active cookies
+     * @return array Возвращает массив, содержащий в себе ассоциативный массив с информацией о всех активных куках
      * [
-     * 'Name' => Cookie name
-     * 'Value' => Cookie value
-     * 'Domain' => The domain for which the cookie was installed
+     *     'Name' => Название куки
+     *     'Value' => Значение куки
+     *     'Domain' => Домен, для которого была установлена куки
      * ]
      */
     public function getCookies(): array
@@ -431,11 +480,27 @@ class HttpDownloader
     }
 
     /**
-     * Deletes all cookies
+     * Удаляет все куки
      */
     public function removeCookies(): void
     {
         $this->getClient()->removeCookies();
+    }
+
+    /**
+     * @param bool $authorise Устанавливает статус авторизации
+     */
+    public function setAuthorise( bool $authorise ): void
+    {
+        $this->authorise = $authorise;
+    }
+
+    /**
+     * @return bool Возвращает текущий статус авторизации
+     */
+    public function getAuthorise(): bool
+    {
+        return $this->authorise;
     }
 
     private function printParseError( Link $link, RequestException $exception ): void
@@ -452,6 +517,7 @@ class HttpDownloader
         }
     }
 
+    #[ArrayShape( [ 'link' => Link::class, 'delay' => "int" ] )]
     private function prepareErrorLinks( Link $link, int $delay ): array
     {
         return [
@@ -460,20 +526,11 @@ class HttpDownloader
         ];
     }
 
-    private function prepareRequestData( ?Data $response_body, Link $link, bool $assoc, array $data ): array
+    private function prepareRequestData( ?Data $response_body, Link $link, array $data ): array
     {
-        if ( $assoc ) {
-            $data[] = [
-                'data' => $response_body ?? new Data(),
-                'link' => [
-                    'url' => $link->getUrl(),
-                    'params' => $link->getParams()
-                ]
-            ];
-        }
-        else {
-            $data[ $link->getUrl() ] = $response_body ?? new Data();
-        }
+        $response_body?->setPageLink( $link );
+
+        $data[] = $response_body ?? new Data( page_link: $link );
         return $data;
     }
 
@@ -486,7 +543,7 @@ class HttpDownloader
     }
 
     /**
-     * @return string|null Returns the url to which the authorization request will be sent
+     * @return string|null Возвращает url адрес на который будет отправлен запрос для авторизации
      */
     public function getAuthUrl(): ?string
     {
@@ -494,7 +551,7 @@ class HttpDownloader
     }
 
     /**
-     * @return string|null Returns the url of the page where the authorization form is located
+     * @return string|null Возвращает url адрес страницы, на которой находится форма авторизации
      */
     public function getAuthFormUrl(): ?string
     {
@@ -502,7 +559,7 @@ class HttpDownloader
     }
 
     /**
-     * @return array Returns an array of parameters for authorization
+     * @return array Возвращает массив параметров для авторизации
      */
     public function getAuthInfo(): array
     {
@@ -510,7 +567,7 @@ class HttpDownloader
     }
 
     /**
-     * @return bool Returns a value, depending on which the authorization form parameters will be sent as "form_data" or " request_payload"
+     * @return bool Возвращает значение, в зависимости от которого, параметры формы авторизации будут отправлены, как "form_data", либо "request_payload"
      */
     public function getApiAuth(): bool
     {
@@ -518,7 +575,7 @@ class HttpDownloader
     }
 
     /**
-     * @return string|null Returns the authorization verification word
+     * @return string|null Возвращает проверочное слово авторизации
      */
     public function getCheckLoginText(): ?string
     {
@@ -526,7 +583,7 @@ class HttpDownloader
     }
 
     /**
-     * Authorization process
+     * Процесс авторизации
      * @param null $callback
      * @return bool
      */
@@ -559,13 +616,13 @@ class HttpDownloader
     }
 
     /**
-     * Used to get form fields
-     * @param string|Link $link Link to the page where the form is located
-     * @param string $field_name The name of the field located inside the desired form. The form will be searched by the name of this field
-     * To get all fields from any form, you must pass an empty value
-     * @param array $params Array of parameters with the original values, if any
-     * The @param bool $only_hidden parameter allows you to collect all the fields of the form or only hidden ones. By default, all fields of the form are collected
-     * @return array An associative array in which the keys are the names of the form fields, the values are the values of the form fields
+     * Используется для получения полей формы
+     * @param string|Link $link Ссылка на страницу, где расположена форма
+     * @param string $field_name Имя поля, находящееся внутри нужной формы. По имени этого поля будет произведен поиск формы
+     * Для получения всех полей из любой формы необходимо передать пустое значение
+     * @param array $params Массив параметров с исходными значениями, если они есть
+     * @param bool $only_hidden Параметр позволяет собирать все поля формы или только скрытые. По-умолчанию собираются все поля формы
+     * @return array Ассоциативный массив, в котором ключи - имена полей формы, значения - значения полей формы
      */
     public function getFieldsFormOnLink( string|Link $link, string $field_name = '', array $params = [], bool $only_hidden = false ): array
     {
@@ -573,13 +630,13 @@ class HttpDownloader
     }
 
     /**
-     * Used to get form fields
-     * @param ParserCrawler $crawler Html content of the page where the form is located
-     * @param string $field_name The name of the field located inside the desired form. The form will be searched by the name of this field
-     * To get all fields from any form, you must pass an empty value
-     * @param array $params Array of parameters with the original values, if any
-     * The @param bool $only_hidden parameter allows you to collect all the fields of the form or only hidden ones. By default, all fields of the form are collected
-     * @return array An associative array in which the keys are the names of the form fields, the values are the values of the form fields
+     * Используется для получения полей формы
+     * @param ParserCrawler $crawler Html содержимое страницы, где расположена форма
+     * @param string $field_name Имя поля, находящееся внутри нужной формы. По имени этого поля будет произведен поиск формы
+     * Для получения всех полей из любой формы необходимо передать пустое значение
+     * @param array $params Массив параметров с исходными значениями, если они есть
+     * @param bool $only_hidden Параметр позволяет собирать все поля формы или только скрытые. По-умолчанию собираются все поля формы
+     * @return array Ассоциативный массив, в котором ключи - имена полей формы, значения - значения полей формы
      */
     public function getFieldsFormOnCrawler( ParserCrawler $crawler, string $field_name = '', array $params = [], bool $only_hidden = false ): array
     {
@@ -629,7 +686,7 @@ class HttpDownloader
     }
 
     /**
-     * Verification of authorization on the site by the verification word
+     * Проверка авторизации на сайте по проверочному слову
      * @param ParserCrawler $crawler
      * @return bool
      */
@@ -638,6 +695,7 @@ class HttpDownloader
         if ( $this->getCheckLoginText() && $crawler->count() ) {
             if ( stripos( $crawler->text(), $this->getCheckLoginText() ) !== false ) {
                 print PHP_EOL . 'Authorization successful!' . PHP_EOL;
+                $this->setAuthorise( true );
                 return true;
             }
         }
@@ -646,12 +704,13 @@ class HttpDownloader
         }
 
         print PHP_EOL . 'Authorization fail!' . PHP_EOL;
+        $this->setAuthorise( false );
         return false;
     }
 
     private function initProxy( Link $link ): void
     {
-        ( new ProxyConnector() )->connect( $this, $link );
+        ( new ProxyConnector() )->connect( $this, $link, $this->connect_limit );
         $this->connect = true;
     }
 }

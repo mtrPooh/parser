@@ -11,31 +11,31 @@ use GuzzleHttp\Psr7\Response;
 class HttpClient
 {
     /**
-     * @var Client Asynchronous http client
+     * @var Client Асинхронный http клиент
      */
     private Client $client;
     /**
-     * @var Response Object that contains information about the last successful response of the server to an http request
+     * @var Response Объект, который содержит информацию о последнем успешном ответе сервера на http запрос
      */
     private Response $response;
     /**
-     * @var CookieJar Cookie object
+     * @var CookieJar Объект cookie
      */
     private CookieJar $cookie_jar;
     /**
-     * @var string Contains the domain name of the site for which user cookies will be set
+     * @var string Содержит доменное имя сайта, для которого будут устанавливаться пользовательские cookie
      */
     private string $domain;
     /**
-     * @var array Contains an array of custom headers
+     * @var array Содержит массив пользовательских заголовков
      */
     private array $headers = [];
     /**
-     * @var int Defines the request processing timeout in seconds
+     * @var int Определяет время ожидания обработки запроса в секундах
      */
     private int $timeout_s = 60;
     /**
-     * @var string|null Proxy server address
+     * @var string|null Адрес прокси сервера
      */
     private ?string $proxy = null;
 
@@ -48,7 +48,7 @@ class HttpClient
     }
 
     /**
-     * @param int $timeout Sets the waiting time for a response to an http request
+     * @param int $timeout Устанавливает время ожидания ответа на http запрос
      */
     public function setRequestTimeOut( int $timeout ): void
     {
@@ -56,7 +56,7 @@ class HttpClient
     }
 
     /**
-     * @return Client Returns an object of the client class
+     * @return Client Возвращает объект класса клиента
      */
     public function getHttpClient(): Client
     {
@@ -64,7 +64,7 @@ class HttpClient
     }
 
     /**
-     * @param Response $response Sets an object with information about the response to the last successful http request
+     * @param Response $response Устанавливает объект с информацией об ответе на последний успешный http запрос
      */
     public function setResponse( Response $response ): void
     {
@@ -72,7 +72,7 @@ class HttpClient
     }
 
     /**
-     * @return Response Returns an object with information about the response to the last successful http request
+     * @return Response Возвращает объект с информацией об ответе на последний успешный http запрос
      */
     public function getResponse(): Response
     {
@@ -80,9 +80,9 @@ class HttpClient
     }
 
     /**
-     * Sets the http request header
-     * @param string $name Title name
-     * @param string $value Header value
+     * Устанавливает заголовок http запроса
+     * @param string $name Название заголовка
+     * @param string $value Значение заголовка
      */
     public function setHeader( string $name, string $value ): void
     {
@@ -90,7 +90,7 @@ class HttpClient
     }
 
     /**
-     * @param array $headers Sets a set of http request headers
+     * @param array $headers Устанавливает набор заголовков http запроса
      */
     public function setHeaders( array $headers ): void
     {
@@ -98,9 +98,9 @@ class HttpClient
     }
 
     /**
-     * Returns the value of the specified header
-     * @param string $name Title name
-     * @return string|null Header value
+     * Возвращает значение указанного заголовка
+     * @param string $name Название заголовка
+     * @return string|null Значение заголовка
      */
     public function getHeader( string $name ): ?string
     {
@@ -108,7 +108,7 @@ class HttpClient
     }
 
     /**
-     * @return array Returns an array of headers
+     * @return array Возвращает массив заголовков
      */
     public function getHeaders(): array
     {
@@ -116,7 +116,7 @@ class HttpClient
     }
 
     /**
-     * Returns the value of the specified header from the response to the last successful http request
+     * Возвращает значение указанного заголовка из ответа на последний успешный http запрос
      * @param string $name
      * @return string
      */
@@ -127,8 +127,8 @@ class HttpClient
     }
 
     /**
-     * Deletes the title by its name
-     * @param string $name Title name
+     * Удаляет заголовок по его названию
+     * @param string $name Название заголовка
      */
     public function removeHeader( string $name ): void
     {
@@ -136,7 +136,7 @@ class HttpClient
     }
 
     /**
-     * Removes all headers
+     * Удаляет все заголовки
      */
     public function removeHeaders(): void
     {
@@ -144,9 +144,9 @@ class HttpClient
     }
 
     /**
-     * Sets a new cookie
-     * @param string $name Cookie name
-     * @param string $value Cookie value
+     * Устанавливает новую cookie
+     * @param string $name Название cookie
+     * @param string $value Значение cookie
      */
     public function setCookie( string $name, string $value ): void
     {
@@ -155,9 +155,9 @@ class HttpClient
     }
 
     /**
-     * Returns the value of the specified cookie
-     * @param string $name Cookie name
-     * @return string Cookie value
+     * Возвращает значение указанной cookie
+     * @param string $name Название cookie
+     * @return string Значение cookie
      */
     public function getCookie( string $name ): string
     {
@@ -169,11 +169,11 @@ class HttpClient
     }
 
     /**
-     * Returns an array containing an associative array with information about all active cookies
+     * Возвращает массив, содержащий в себе ассоциативный массив с информацией о всех активных куках
      * [
-     * 'Name' => Cookie name
-     * 'Value' => Cookie value
-     * 'Domain' => The domain for which the cookie was installed
+     *     'Name' => Название куки
+     *     'Value' => Значение куки
+     *     'Domain' => Домен, для которого была установлена куки
      * ]
      */
     public function getCookies(): array
@@ -182,7 +182,7 @@ class HttpClient
     }
 
     /**
-     * Deletes all cookies
+     * Удаляет все куки
      */
     public function removeCookies(): void
     {
@@ -190,7 +190,7 @@ class HttpClient
     }
 
     /**
-     * @param string|null $proxy Sets the proxy server address
+     * @param string|null $proxy Устанавливает адрес прокси сервера
      */
     public function setProxy( ?string $proxy ): void
     {
@@ -198,11 +198,11 @@ class HttpClient
     }
 
     /**
-     * Sends an http request
-     * @param string $link The link where the request will be sent
-     * @param array $params Request parameters
-     * @param string $method Request method
-     * @param string $type_params Type of sending parameters
+     * Отправляет http запрос
+     * @param string $link Ссылка по которой будет отправлен запрос
+     * @param array $params Параметры запроса
+     * @param string $method Метод запроса
+     * @param string $type_params Тип отправки параметров
      */
     public function request( string $link, array $params = [], string $method = 'GET', string $type_params = '' ): PromiseInterface
     {
@@ -217,6 +217,9 @@ class HttpClient
             if ( $type_params === 'request_payload' ) {
                 $request_params[ 'json' ] = $params;
             }
+            elseif ( $type_params === 'raw_data' ) {
+                $request_params[ 'body' ] = array_shift( $params );
+            }
             else {
                 $request_params[ 'form_params' ] = $params;
             }
@@ -225,7 +228,7 @@ class HttpClient
     }
 
     /**
-     * @param string $source Sets the domain for which user cookies will be created
+     * @param string $source Устанавливает домен для которого будут создаваться пользовательские cookie
      */
     private function setDomain( string $source ): void
     {

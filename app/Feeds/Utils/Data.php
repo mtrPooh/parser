@@ -12,11 +12,13 @@ class Data
 
     private string $raw_data;
     private int $status_code;
+    private Link $page_link;
 
-    public function __construct( string $raw_data = '', int $status_code = 200 )
+    public function __construct( string $raw_data = '', int $status_code = 200, Link $page_link = null )
     {
         $this->raw_data = $raw_data;
         $this->status_code = $status_code;
+        $this->page_link = $page_link ?? new Link('');
     }
 
     /**
@@ -59,6 +61,16 @@ class Data
     public function getStatusCode(): int
     {
         return $this->status_code;
+    }
+
+    public function setPageLink( Link $page_link ): void
+    {
+        $this->page_link = $page_link;
+    }
+
+    public function getPageLink(): Link
+    {
+        return $this->page_link;
     }
 
     public function __toString()

@@ -18,8 +18,20 @@ class Collection extends \Illuminate\Support\Collection
         $links = array_map( static fn( $link ) => $link instanceof Link ? $link : new Link( (string)$link ), $links );
 
         foreach ( $links as $link ) {
-            if ( !$this->has( $link->getUrl() ) ) {
-                $this->put( $link->getUrl(), [ 'link' => $link, 'type' => $type ] );
+            if ( $link->getMethod() === 'POST' ) {
+                $current_link = $link->getUrl() . '@post_params=' . http_build_query( $link->getParams() );
+            }
+            else {
+                $current_link = $link->getUrl();
+            }
+
+            if ( !$this->has( $current_link ) ) {
+                if ( $link->getMethod() === 'POST' ) {
+                    $this->put( $link->getUrl() . '@post_params=' . http_build_query( $link->getParams() ), [ 'link' => $link, 'type' => $type ] );
+                }
+                else {
+                    $this->put( $link->getUrl(), [ 'link' => $link, 'type' => $type ] );
+                }
             }
         }
         $this->sortBy( 'type' );

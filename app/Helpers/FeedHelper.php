@@ -250,13 +250,13 @@ class FeedHelper
                     }
                 }
 
-                if ( empty( $replacement ) ) {
-                    $description = (string)preg_replace( $regex, '', $description );
-                }
-                else {
+                if ( StringHelper::isNotEmpty( $replacement ) ) {
                     $split_string = preg_split( $regex, $description );
                     $split_string[ 0 ] .= "<ul>$replacement</ul>";
                     $description = implode( $replacement, $split_string );
+                }
+                else {
+                    $description = (string)preg_replace( $regex, '', $description );
                 }
             }
         }
