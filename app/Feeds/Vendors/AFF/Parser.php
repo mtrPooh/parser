@@ -24,7 +24,7 @@ class Parser extends HtmlParser
             $domain = $domain[ count( $domain ) - 2 ];
         }
         return [ 'name' => $this->getProduct(),
-            'video' => str_contains( $src, 'http' ) ?: 'https:' . $src,
+            'video' => str_contains( $src, 'http' ) ? $src : 'https:' . $src,
             'provider' => $domain ];
     }
 
@@ -126,8 +126,18 @@ class Parser extends HtmlParser
 
             $this->desc = preg_replace( '%[<h\w>]+(Spec|Featur|Dimension|Addition).*?</h\d+>\s*##del##%', '', $this->desc );
             $this->desc = str_replace( '##del##', '', $this->desc );
-            $this->desc = preg_replace( '%<h\d+>' . $this->getProduct() . '</h\d+>%ui', '', $this->desc );
         }
+
+        preg_match_all( '%(<h\d+.*?</h\d+>)%ui', $this->desc, $matches );
+
+        foreach ( $matches[ 1 ] as $match ) {
+            if ( str_contains( $match, $this->getMpn() ) ) {
+                $this->desc = str_replace( $match, '', $this->desc );
+            }
+        }
+
+        $this->desc = preg_replace( '%<h\d+>' . $this->getProduct() . '</h\d+>%ui', '', $this->desc );
+        $this->desc = trim( str_replace( '.<', '. <', $this->desc ) );
     }
 
     public function getMpn(): string
@@ -177,18 +187,6 @@ class Parser extends HtmlParser
         $avail = $this->getAttr( 'meta[itemprop="availability"]', 'content' );
 
         return $avail === 'http://schema.org/InStock' ? self::DEFAULT_AVAIL_NUMBER : 0;
-    }
-
-    public function getCategories(): array
-    {
-        $categories = $this->getContent( 'ul.breadcrumbs li a' );
-        array_shift( $categories );
-
-        if ( $categories[ count( $categories ) - 1 ] === $this->getProduct() ) {
-            unset( $categories[ count( $categories ) - 1 ] );
-        }
-
-        return $categories;
     }
 
     public function getBrand(): ?string
