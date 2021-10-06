@@ -6,6 +6,7 @@ use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
 use App\Feeds\Utils\ParserCrawler;
 use App\Helpers\StringHelper;
+use DateTime;
 
 class Parser extends HtmlParser
 {
@@ -146,6 +147,11 @@ class Parser extends HtmlParser
                     $match[ 1 ] *= 12;
                 }
                 $this->dims[ 'y' ] = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
+
+                return;
+            }
+            if ( $name === 'Weight' && preg_match( '%([\d.\-/]+)%', $value, $match ) ) {
+                $this->weight = StringHelper::getFloat( str_replace( '-', ' ', $match[ 1 ] ) );
 
                 return;
             }
@@ -373,6 +379,20 @@ class Parser extends HtmlParser
         return $categories;
     }
 
+    public function getLeadTimeMessage(): ?string
+    {
+        $lead_time = null;
+        $this->filter( 'div.long-description p' )->each( function ( ParserCrawler $c ) use ( &$lead_time ) {
+            $p = $c->outerHtml();
+            if ( preg_match( '%([\d\-. ]+weeks to ship)%ui', $p, $match ) ) {
+                $lead_time = trim( $match[ 1 ] );
+                $this->description = str_replace( $p, '', $this->description );
+            }
+        } );
+        
+        return $lead_time;
+    }
+
     public function getDescription(): string
     {
         $search = [
@@ -404,7 +424,8 @@ class Parser extends HtmlParser
             if ( str_contains( $b, '$' ) || str_contains( $b, 'Dimensions:' ) || str_contains( $b, 'Size:' )
                 || str_contains( $b, 'Measures:' ) || str_contains( $b, 'Diameter:' ) || str_contains( $b, 'Outside:' )
                 || str_contains( $b, 'Inside:' ) || str_contains( $b, 'Depth:' ) || str_contains( $b, 'contact us' )
-                || str_contains( $b, 'call us' ) || str_contains( $b, 'Fax:' ) || str_contains( $b, 'Mail:' ) || preg_match( '%\w+@\w+.\w+%', $b ) ) {
+                || str_contains( $b, 'call us' ) || str_contains( $b, 'Fax:' ) || str_contains( $b, 'Mail:' ) || preg_match( '%\w+@\w+.\w+%', $b )
+                || str_contains( $b, 'video' ) ) {
 
                 $description = str_replace( $b, '', $description );
             }
@@ -440,9 +461,18 @@ class Parser extends HtmlParser
         $description = preg_replace( [ '%<h\d+.*?</h\d+#del#%', '%<ul>\s*</ul>%ui' ], '', $description );
         $description = str_replace( '#del#', '', $description );
         $description = preg_replace( '%<p>Benefits:</p>\s*<ul.*?</ul>%uis', '', $description );
-        $description = preg_replace( '%>[<h\w+>bp\s]*Features:[</h\d+>brp\s]*<ul>(.*?)</ul>%uis', '>', $description );
+        $description = preg_replace( '%>[<h\w+>bp\s]*Features[&Benfits ]*:[</h\d+>brp\s]*<ul>(.*?)</ul>%uis', '>',
+            $description );
         $description = preg_replace( '%([<h\w+>bp\s]*)NOTE:[</h\d+>brp\s]*.*?\$.*?<%uis', '$1<', $description );
         $description = preg_replace( [ '%(<ul>|<li>).*?</ul>%uis', '%<h\d+.*?</h\d+>[<br>\s]*$%' ], '', $description );
+
+        if ( starts_with( $description, '<table' ) && ends_with( $description, '</table>' ) ) {
+            $description = '';
+            $this->filter( 'div.long-description table p' )->each( function ( ParserCrawler $c ) use ( &$description ) {
+                $p = $c->outerHtml();
+                $description .= $p;
+            } );
+        }
 
         return trim( $description );
     }
