@@ -144,6 +144,7 @@ class Parser extends HtmlParser
         }
 
         $this->desc = preg_replace( '%<h\d+>' . $this->getProduct() . '</h\d+>%ui', '', $this->desc );
+        $this->desc = preg_replace( '%<([/]*)h\d+>%ui', '<$1p>', $this->desc );
         $this->desc = trim( str_replace( '.<', '. <', $this->desc ) );
     }
 
@@ -262,6 +263,32 @@ class Parser extends HtmlParser
         } );
 
         return $videos;
+    }
+
+    public function getOptions(): array
+    {
+        $options = [];
+        $this->filter( 'div[data-product-attribute="set-select"]' )->each( function ( ParserCrawler $c ) use ( &$options ) {
+            $label = $c->getHtml( 'label' );
+            if ( str_contains( $label, ':' ) ) {
+                $label = substr( $label, 0, strpos( $label, ':' ) );
+            }
+            if ( str_contains( $label, '<' ) ) {
+                $label = substr( $label, 0, strpos( $label, '<' ) );
+            }
+            $label = trim( $label );
+
+            $values = [];
+            $c->filter( 'option' )->each( function ( ParserCrawler $o ) use ( &$values ) {
+                $values[] = trim( $o->getText( 'option' ) );
+            } );
+
+            if ( !empty( $values ) ) {
+                $options[ $label ] = $values;
+            }
+        } );
+
+        return $options;
     }
 
     public function getDimZ(): ?float
