@@ -6,7 +6,6 @@ use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
 use App\Feeds\Utils\ParserCrawler;
 use App\Helpers\StringHelper;
-use DateTime;
 
 class Parser extends HtmlParser
 {
@@ -15,6 +14,7 @@ class Parser extends HtmlParser
     private array $dims = [];
     private array $shorts = [];
     private string $description = '';
+    private ?string $lead_time = null;
     private ?float $weight = null;
 
     private function parseImages( string $data ): array
@@ -381,16 +381,7 @@ class Parser extends HtmlParser
 
     public function getLeadTimeMessage(): ?string
     {
-        $lead_time = null;
-        $this->filter( 'div.long-description p' )->each( function ( ParserCrawler $c ) use ( &$lead_time ) {
-            $p = $c->outerHtml();
-            if ( preg_match( '%([\d\-. ]+weeks to ship)%ui', $p, $match ) ) {
-                $lead_time = trim( $match[ 1 ] );
-                $this->description = str_replace( $p, '', $this->description );
-            }
-        } );
-        
-        return $lead_time;
+        return $this->lead_time;
     }
 
     public function getDescription(): string
@@ -460,6 +451,7 @@ class Parser extends HtmlParser
         }
         $description = preg_replace( [ '%<h\d+.*?</h\d+#del#%', '%<ul>\s*</ul>%ui' ], '', $description );
         $description = str_replace( '#del#', '', $description );
+        $description = preg_replace( '%<h\d+>' . $this->getProduct() . '</h\d+>%', '', $description );
         $description = preg_replace( '%<p>Benefits:</p>\s*<ul.*?</ul>%uis', '', $description );
         $description = preg_replace( '%>[<h\w+>bp\s]*Features[&Benfits ]*:[</h\d+>brp\s]*<ul>(.*?)</ul>%uis', '>',
             $description );
@@ -473,6 +465,14 @@ class Parser extends HtmlParser
                 $description .= $p;
             } );
         }
+
+        $this->filter( 'div.long-description p' )->each( function ( ParserCrawler $c ) use ( &$description ) {
+            $p = $c->outerHtml();
+            if ( preg_match( '%([\d\-. ]+weeks to ship)%ui', $p, $match ) ) {
+                $this->lead_time = trim( $match[ 1 ] );
+                $description = str_replace( $p, '', $description );
+            }
+        } );
 
         return trim( $description );
     }
