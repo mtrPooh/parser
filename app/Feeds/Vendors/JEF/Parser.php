@@ -451,12 +451,18 @@ class Parser extends HtmlParser
         }
         $description = preg_replace( [ '%<h\d+.*?</h\d+#del#%', '%<ul>\s*</ul>%ui' ], '', $description );
         $description = str_replace( '#del#', '', $description );
-        $description = preg_replace( '%<h\d+>' . $this->getProduct() . '</h\d+>%', '', $description );
         $description = preg_replace( '%<p>Benefits:</p>\s*<ul.*?</ul>%uis', '', $description );
         $description = preg_replace( '%>[<h\w+>bp\s]*Features[&Benfits ]*:[</h\d+>brp\s]*<ul>(.*?)</ul>%uis', '>',
             $description );
         $description = preg_replace( '%([<h\w+>bp\s]*)NOTE:[</h\d+>brp\s]*.*?\$.*?<%uis', '$1<', $description );
         $description = preg_replace( [ '%(<ul>|<li>).*?</ul>%uis', '%<h\d+.*?</h\d+>[<br>\s]*$%' ], '', $description );
+
+        preg_match_all( '%(<h\d+.*?</h\d+>)%ui', $description, $match );
+        foreach ( $match[ 1 ] as $m ) {
+            if ( str_contains( $m, $this->getProduct() ) ) {
+                $description = str_replace( $m, '', $description );
+            }
+        }
 
         if ( starts_with( $description, '<table' ) && ends_with( $description, '</table>' ) ) {
             $description = '';
