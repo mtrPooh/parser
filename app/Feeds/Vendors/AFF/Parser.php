@@ -34,6 +34,13 @@ class Parser extends HtmlParser
             return [];
         }
 
+        if ( preg_match( '%<h1(.*?)</h1>%ui', $data->getData(), $match ) ) {
+            $h1 = strtolower( $match[ 1 ] );
+            if ( str_contains( $h1, 'warranty' ) || str_contains( $h1, 'cloud recording' ) ) {
+                return [];
+            }
+        }
+
         return parent::parseContent( $data, $params );
     }
 
@@ -178,6 +185,16 @@ class Parser extends HtmlParser
             }
             $images[] = $image;
         } );
+
+        if ( count( $images ) === 1 ) {
+            $images[ 0 ] = strtolower( $images[ 0 ] );
+            $brand = explode( ' ', $this->getBrand() );
+            $brand = strtolower( $brand[ 0 ] );
+
+            if ( str_contains( $images[ 0 ], $brand ) ) {
+                return [];
+            }
+        }
 
         return array_values( array_unique( $images ) );
     }
