@@ -136,14 +136,19 @@ class Parser extends HtmlParser
         }
 
         preg_match_all( '%(<h\d+.*?</h\d+>)%ui', $this->desc, $matches );
-
         foreach ( $matches[ 1 ] as $match ) {
             if ( str_contains( $match, $this->getMpn() ) ) {
                 $this->desc = str_replace( $match, '', $this->desc );
             }
         }
 
-        $this->desc = preg_replace( '%<h\d+>' . $this->getProduct() . '</h\d+>%ui', '', $this->desc );
+        preg_match_all( '%(<h\d+.*?</h\d+>)%ui', $this->desc, $match );
+        foreach ( $match[ 1 ] as $m ) {
+            if ( str_contains( $m, $this->getProduct() ) ) {
+                $this->desc = str_replace( $m, '', $this->desc );
+            }
+        }
+
         $this->desc = preg_replace( '%<([/]*)h\d+>%ui', '<$1p>', $this->desc );
         $this->desc = trim( str_replace( '.<', '. <', $this->desc ) );
     }
