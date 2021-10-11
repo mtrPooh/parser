@@ -112,8 +112,14 @@ class Parser extends HtmlParser
                         $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 2 ] );
                         $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 3 ] );
                     }
-                    elseif ( preg_match( '%Weight.*?([\d.]+)\s*oz%ui', $li, $match ) ) {
+                    elseif ( preg_match( '%Weight[:]*.*?([\d.]+)\s*oz%ui', $li, $match ) ) {
                         $this->weight = FeedHelper::convertLbsFromOz( $match[ 1 ] );
+                    }
+                    elseif ( preg_match( '%Weight[:]*.*?([\d.]+)\s*g%ui', $li, $match ) ) {
+                        $this->weight = FeedHelper::convertLbsFromG( $match[ 1 ] );
+                    }
+                    elseif ( preg_match( '%Weight[:]*.*?([\d.]+)\s*(lb|pound)%ui', $li, $match ) ) {
+                        $this->weight = StringHelper::getFloat( $match[ 1 ] );
                     }
                     elseif ( str_contains( $li, ':' ) ) {
                         $li = explode( ':', $li );
