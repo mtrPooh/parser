@@ -161,7 +161,7 @@ class Parser extends HtmlParser
 
     public function getMpn(): string
     {
-        return $this->getText( 'dd.productView-info-value--sku' );
+        return trim( str_replace( '*', '', $this->getText( 'dd.productView-info-value--sku' ) ) );
     }
 
     public function getUpc(): ?string
