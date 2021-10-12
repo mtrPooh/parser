@@ -46,8 +46,7 @@ class Parser extends HtmlParser
 
     public function beforeParse(): void
     {
-        $product_info = FeedHelper::getShortsAndAttributesInDescription( $this->getHtml( 'div[itemprop="description"]' ),
-            [ '/(?<content_list><li>.*?<\/li>)/' ] );
+        $product_info = FeedHelper::getShortsAndAttributesInDescription( $this->getHtml( 'div[itemprop="description"]' ) );
 
         $this->desc = $product_info[ 'description' ];
         $this->shorts = $product_info[ 'short_description' ];
