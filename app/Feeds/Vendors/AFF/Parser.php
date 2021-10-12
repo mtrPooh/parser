@@ -46,7 +46,12 @@ class Parser extends HtmlParser
 
     public function beforeParse(): void
     {
-        $this->desc = $this->getHtml( 'div[itemprop="description"]' );
+        $product_info = FeedHelper::getShortsAndAttributesInDescription( $this->getHtml( 'div[itemprop="description"]' ),
+            [ '/(?<content_list><li>.*?<\/li>)/' ] );
+
+        $this->desc = $product_info[ 'description' ];
+        $this->shorts = $product_info[ 'short_description' ];
+        $this->attrs = $product_info[ 'attributes' ];
 
         $this->filter( 'div[itemprop="description"] p' )->each( function ( ParserCrawler $c ) {
             $p = trim( $c->getText( 'p' ), '  ' );
@@ -91,55 +96,50 @@ class Parser extends HtmlParser
             $this->desc = substr( $this->desc, 0, strpos( $this->desc, '<div class="productView-productTabs"' ) );
         }
 
-        if ( preg_match_all( '%<ul(.*?)</ul>%uis', $this->desc, $matches, PREG_SET_ORDER ) ) {
-
-            foreach ( $matches as $ul ) {
-
-                preg_match_all( '%<li.*?>(.*?)</li%ui', $ul[ 1 ], $lis );
-
-                foreach ( $lis[ 1 ] as $li ) {
-                    $li = strip_tags( $li );
-                    if ( str_contains( $li, 'SKU' ) || str_contains( $li, 'UPC' ) ) {
-                        continue;
-                    }
-                    if ( preg_match( '%\(\s*([\d.]+)[”x\s]+([\d.]+)[”x\s]+([\d.]+)%ui', $li, $match ) ) {
-                        $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 1 ] );
-                        $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 2 ] );
-                        $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 3 ] );
-                    }
-                    elseif ( preg_match( '%([\d.]+)[”HWDLx\s]+([\d.]+)[”HWDLx\s]+([\d.]+)%ui', $li, $match ) ) {
-                        $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 1 ] );
-                        $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 2 ] );
-                        $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 3 ] );
-                    }
-                    elseif ( preg_match( '%Weight[:]*.*?([\d.]+)\s*oz%ui', $li, $match ) ) {
-                        $this->weight = FeedHelper::convertLbsFromOz( $match[ 1 ] );
-                    }
-                    elseif ( preg_match( '%Weight[:]*.*?([\d.]+)\s*g%ui', $li, $match ) ) {
-                        $this->weight = FeedHelper::convertLbsFromG( $match[ 1 ] );
-                    }
-                    elseif ( preg_match( '%Weight[:]*.*?([\d.]+)\s*(lb|pound)%ui', $li, $match ) ) {
-                        $this->weight = StringHelper::getFloat( $match[ 1 ] );
-                    }
-                    elseif ( str_contains( $li, ':' ) ) {
-                        $li = explode( ':', $li );
-                        $key = trim( $li[ 0 ] );
-                        $value = trim( $li[ 1 ] );
-                        if ( !empty( $key ) && !empty( $value ) ) {
-                            $this->attrs[ $key ] = $value;
-                        }
-                    }
-                    else {
-                        $this->shorts[] = trim( $li );
-                    }
-
-                    $this->desc = str_replace( $ul[ 0 ], '##del##', $this->desc );
+        if ( is_array( $this->shorts ) ) {
+            foreach ( $this->shorts as $key => $li ) {
+                $li = strip_tags( $li );
+                if ( str_contains( $li, 'SKU' ) || str_contains( $li, 'UPC' ) ) {
+                    unset( $this->shorts[ $key ] );
+                    continue;
+                }
+                if ( preg_match( '%\(\s*([\d.]+)[”x\s]+([\d.]+)[”x\s]+([\d.]+)%ui', $li, $match ) ) {
+                    $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 1 ] );
+                    $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 2 ] );
+                    $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 3 ] );
+                    unset( $this->shorts[ $key ] );
+                }
+                elseif ( preg_match( '%([\d.]+)[”HWDLx\s]+([\d.]+)[”HWDLx\s]+([\d.]+)%ui', $li, $match ) ) {
+                    $this->dims[ 'x' ] = StringHelper::getFloat( $match[ 1 ] );
+                    $this->dims[ 'y' ] = StringHelper::getFloat( $match[ 2 ] );
+                    $this->dims[ 'z' ] = StringHelper::getFloat( $match[ 3 ] );
+                    unset( $this->shorts[ $key ] );
                 }
             }
-
-            $this->desc = preg_replace( '%[<h\w>]+(Spec|Featur|Dimension|Addition).*?</h\d+>\s*##del##%', '', $this->desc );
-            $this->desc = str_replace( '##del##', '', $this->desc );
         }
+
+        if ( is_array( $this->attrs ) ) {
+            foreach ( $this->attrs as $key => $li ) {
+                if ( str_contains( $key, 'Weight' ) && preg_match( '%([\d.]+)\s*(oz|g|lb|pound)%ui', $li, $match ) ) {
+                    if ( str_contains( $match[ 1 ], 'oz' ) ) {
+                        $this->weight = FeedHelper::convertLbsFromOz( $match[ 1 ] );
+                    }
+                    elseif ( str_contains( $match[ 1 ], 'g' ) ) {
+                        $this->weight = FeedHelper::convertLbsFromG( $match[ 1 ] );
+                    }
+                    else {
+                        $this->weight = StringHelper::getFloat( $match[ 1 ] );
+                    }
+                    unset( $this->attrs[ $key ] );
+                }
+            }
+        }
+
+        $this->attrs = !empty( $this->attrs ) ? $this->attrs : null;
+
+        $this->desc = preg_replace( '%\s*<ul.*?</ul>\s*%uis', '##del##', $this->desc );
+        $this->desc = preg_replace( '%[<h\w>]+(Spec|Featur|Dimension|Addition).*?</h\d+>\s*##del##%', '', $this->desc );
+        $this->desc = str_replace( '##del##', '', $this->desc );
 
         preg_match_all( '%(<h\d+.*?</h\d+>)%ui', $this->desc, $matches );
         foreach ( $matches[ 1 ] as $match ) {
@@ -230,7 +230,7 @@ class Parser extends HtmlParser
 
     public function getShortDescription(): array
     {
-        return $this->shorts;
+        return array_slice( $this->shorts, 0, 10 );
     }
 
     public function getProductFiles(): array
