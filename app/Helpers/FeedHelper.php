@@ -3,13 +3,16 @@
 namespace App\Helpers;
 
 use App\Feeds\Utils\ParserCrawler;
+use InvalidArgumentException;
+use JetBrains\PhpStorm\ArrayShape;
+use JetBrains\PhpStorm\Pure;
 
 class FeedHelper
 {
     /**
-     * Clears the product description from unnecessary line breaks, spaces, unnecessary and empty tags, garbage in sentences and paragraphs
-     * @param string $description Product Description
-     * @return string Cleared description
+     * Очищает описание товара от лишних переносов строки, пробелов, лишних и пустых тегов, мусора в предложениях и параграфах
+     * @param string $description Описание товара
+     * @return string Очищенное описание
      */
     public static function cleanProductDescription( string $description ): string
     {
@@ -17,29 +20,29 @@ class FeedHelper
             $description = self::cleanProductData( $description );
             $description = StringHelper::cutTagsAttributes( $description );
             $description = str_replace( [ '<div>', '</div>' ], [ '<p>', '</p>' ], html_entity_decode( StringHelper::removeSpaces( $description ) ) );
-            $description = preg_replace( '/<h[\d]?>(.*?)<\/h[\d]?>/', '<p>$1</p>', $description );
+            $description = (string)preg_replace( '/<h[\d]?>(.*?)<\/h[\d]?>/', '<b>$1</b><br>', $description );
 
-            /** Removes empty tags from the product description **/
+            /** Удаляет пустые теги из описания товара **/
             $description = StringHelper::cutEmptyTags( StringHelper::cutTags( $description ) );
         }
         return $description;
     }
 
     /**
-     * Clears the array of product features from empty elements
-     * @param array $short_description Product Features
-     * @return array Cleared features
+     * Очищает массив особенностей товара от пустых элементов
+     * @param array $short_description Особенности товара
+     * @return array Очищенные особенности
      */
     public static function cleanShortDescription( array $short_description ): array
     {
-        $short_description = array_map( static fn( $desc ) => StringHelper::removeSpaces( self::cleanProductData( $desc ) ), $short_description );
-        return array_filter( $short_description, static fn( $description ) => StringHelper::isNotEmpty( $description ) );
+        $short_description = array_map( static fn( $desc ) => StringHelper::removeSpaces( self::cleanProductData( str_replace( '•', '', $desc ) ) ), $short_description );
+        return array_filter( $short_description, static fn( $description ) => StringHelper::isNotEmpty( $description ) && self::cleaning( $description, [ '/\$(\d+)?(\.?\d+(\.?\d+)?)/' ] ) && mb_strlen( $description ) < 500 );
     }
 
     /**
-     * Clears the array of product characteristics from empty elements
-     * @param array|null $attributes Product Characteristics
-     * @return array|null Cleared characteristics
+     * Очищает массив характеристик товара от пустых элементов
+     * @param array|null $attributes Характеристики товара
+     * @return array|null Очищенные характеристики
      */
     public static function cleanAttributes( ?array $attributes ): ?array
     {
@@ -57,40 +60,41 @@ class FeedHelper
     }
 
     /**
-     * Clears the line from garbage in sentences and paragraphs
+     * Очищает текст от мусора в предложениях и параграфах. Если текст обернут в html теги, обрабатывает все вложенные узлы вглубь
      * @param string $string
+     * @param array $user_regex
      * @return string
      */
-    public static function cleanProductData( string $string ): string
+    public static function cleanProductData( string $string, array $user_regex = [] ): string
     {
         if ( str_starts_with( trim( StringHelper::removeSpaces( $string ) ), '<' ) ) {
             $crawler = new ParserCrawler( $string );
             $children = $crawler->filter( 'body' )->count() ? $crawler->filter( 'body' )->children() : [];
             foreach ( $children as $child ) {
-                /** If the current node contains child nodes, we process them separately **/
+                /** Если текущий узел содержит дочерние узлы, обрабатываем их по отдельности **/
                 if ( $child->childElementCount ) {
                     foreach ( $child->childNodes as $node ) {
                         $content = $node->ownerDocument->saveHTML( $node );
-                        $string = str_replace( $content, self::cleanProductData( $content ), $string );
+                        $string = str_replace( $content, self::cleanProductData( $content, $user_regex ), $string );
                     }
                 }
                 else {
                     $content = $child->ownerDocument->saveHTML( $child );
-                    $string = str_replace( $content, self::cleaning( $content ), $string );
+                    $string = str_replace( $content, self::cleaning( $content, $user_regex ), $string );
                 }
             }
         }
         else {
-            $string = str_replace( $string, self::cleaning( $string ), $string );
+            $string = str_replace( $string, self::cleaning( $string, $user_regex ), $string );
         }
         return $string;
     }
 
     /**
-     * Searches for a substring in a string by a regular expression and deletes or replaces it
-     * @param string $string The string in which the search will occur
-     * @param array $user_regex Array of custom regular expressions
-     * @param bool $replace Clear the entire string if a match was found in it, or delete only the found substring
+     * Производит поиск подстроки в строке по регулярному выражению и удаляет или заменяет ее
+     * @param string $string Строка, в которой будет происходить поиск
+     * @param array $user_regex Массив пользовательских регулярных выражений
+     * @param bool $replace Очищать всю строку, если в ней было найдено совпадение или удалять только найденную подстроку
      * @return string
      */
     public static function cleaning( string $string, array $user_regex = [], bool $replace = false ): string
@@ -104,13 +108,12 @@ class FeedHelper
         ];
         $regexes_shipping = [
             '/([–]|[-])?(\s+)?(\()?free shipping(\))?([.]|[!])?/iu',
-            '/ship(ping)? (methods)? (is)? free/is',
+            '/ship(ping|s)?(\s+)?(methods)?(\s+)?(is)?(\s+)?free/is',
             '/drop ship(ping)?/is',
         ];
 
         $regexes_other = [
             '/Product Code(:)?(\s+)?.*?(\.|\!|\?|\W)/is',
-            '/(\s*)?(\+)?([- _():=+]?\d[- _():=+]?){10,14}(\s*)/',
         ];
 
         $regexes = array_merge( $regexes_other, $regexes_shipping, $regexes_price, $user_regex );
@@ -123,16 +126,17 @@ class FeedHelper
     }
 
     /**
-     * Returns the features and characteristics of the product found in the ordered list
-     * @param string $list A list containing the "li"tags
-     * @param array $short_description Array of product features
-     * @param array $attributes Array of product characteristics
-     * @return array{short_description: array, attributes: array|null} Returns an array containing
-     * [
-     *     'short_description' = > array-array of product features
-     *     'attributes' => array|null-an array of product characteristics
-     * ]
+     * Возвращает особенности и характеристики товара, найденные в упорядоченном списке
+     * @param string $list Список, содержащий теги "li"
+     * @param array $short_description Массив особенностей товара
+     * @param array $attributes Массив характеристик товара
+     * @return array Возвращает массив, содержащий
+     *  [
+     *      'short_description' => array - массив особенностей товара
+     *      'attributes' => array|null - массив характеристик товара
+     *  ]
      */
+    #[ArrayShape( [ 'short_description' => "array", 'attributes' => "array|null" ] )]
     public static function getShortsAndAttributesInList( string $list, array $short_description = [], array $attributes = [] ): array
     {
         $crawler = new ParserCrawler( $list );
@@ -154,18 +158,19 @@ class FeedHelper
     }
 
     /**
-     * Returns the features and characteristics of the product found in its description with a regular expression
-     * @param string $description Product Description
-     * @param array $user_regexes Array of regular expressions
-     * @param array $short_description Array of product features
-     * @param array $attributes Array of product characteristics
-     * @return array{description: string, short_description: array, attributes: array|null} Returns an array containing
-     * [
-     *     'description' => string - product description cleared of features and characteristics
-     *     'short_description' = > array-array of product features
-     *     'attributes' => array|null-an array of product characteristics
-     * ]
+     * Возвращает особенности и характеристики товара, найденные в его описании, регулярным выражением
+     * @param string $description Описание товара
+     * @param array $user_regexes Массив регулярных выражений
+     * @param array $short_description Массив особенностей товара
+     * @param array $attributes Массив характеристик товара
+     * @return array Возвращает массив, содержащий
+     *  [
+     *      'description' => string - описание товара очищенное от особенностей и характеристик
+     *      'short_description' => array - массив особенностей товара
+     *      'attributes' => array|null - массив характеристик товара
+     *  ]
      */
+    #[ArrayShape( [ 'description' => "string", 'short_description' => "array", 'attributes' => "array|null" ] )]
     public static function getShortsAndAttributesInDescription( string $description, array $user_regexes = [], array $short_description = [], array $attributes = [] ): array
     {
         $description = StringHelper::cutTagsAttributes( $description );
@@ -177,7 +182,7 @@ class FeedHelper
             'attributes' => $attributes
         ];
 
-        $regex_pattern = '<(div|p|span|b|strong|h[\d]?|em)>%s(\s+)?((<\/\w+>)+)?:?(\s+)?<\/(div|p|span|b|strong|h[\d]?|em)>(\s+)?((<\w+>)+)?((<\/\w+>)+)?((<\w+>)+)?(\s+)?';
+        $regex_pattern = '<(div|p|span|b|strong|h[\d]?|em)>(\s+)?%s(\s+)?((<\/\w+>)+)?:?(\s+)?<\/(div|p|span|b|strong|h[\d]?|em)>(\s+)?((<\w+>)+)?((<\/\w+>)+)?((<\w+>)+)?(\s+)?';
 
         $keys = [
             '(Product[s]?)?(\s+)?Dimension[s]?',
@@ -185,6 +190,7 @@ class FeedHelper
             '(Product[s]?|Key)?(\s+)?Benefit[s]?',
             '(Product[s]?|Key)?(\s+)?Feature[s]?',
             '(Product[s]?)?(\s+)?Detail[s]?',
+            'Features & Benefits',
         ];
 
         $regexes_list = [
@@ -203,11 +209,18 @@ class FeedHelper
         $regexes = array_merge( $regexes, $user_regexes );
         foreach ( $regexes as $regex ) {
             if ( preg_match_all( $regex, $description, $match ) ) {
+                $wrong_shorts = false;
+                $wrong_attributes = false;
+
+                $description_data = [
+                    'short_description' => [],
+                    'attributes' => []
+                ];
+                $list_data = [
+                    'short_description' => [],
+                    'attributes' => []
+                ];
                 foreach ( $match[ 'content_list' ] as $content_list ) {
-                    $list_data = [
-                        'short_description' => [],
-                        'attributes' => []
-                    ];
                     if ( isset( $match[ 'delimiter' ] ) ) {
                         $delimiter = array_shift( $match[ 'delimiter' ] );
                         if ( !str_starts_with( $delimiter, '<' ) ) {
@@ -225,39 +238,32 @@ class FeedHelper
                         $raw_content_list = explode( '<br>', $content_list );
                         $list_data = self::getShortsAndAttributesInList( '<li>' . implode( '</li><li>', $raw_content_list ) . '</li>' );
                     }
-                    $product_data[ 'short_description' ] = array_merge( $product_data[ 'short_description' ], $list_data[ 'short_description' ] );
-                    $product_data[ 'attributes' ] = array_merge( $product_data[ 'attributes' ], $list_data[ 'attributes' ] );
+                    $description_data[ 'short_description' ] = (array)array_merge( $description_data[ 'short_description' ], $list_data[ 'short_description' ] );
+                    $description_data[ 'attributes' ] = (array)array_merge( $description_data[ 'attributes' ], $list_data[ 'attributes' ] );
                 }
 
-                $replacement = '';
-                foreach ( $product_data[ 'short_description' ] as $short ) {
-                    if ( count( $product_data[ 'short_description' ] ) >= 10 || mb_strlen( $short ) > 250 ) {
-                        $replacement .= '<li>' . implode( '</li><li>', $product_data[ 'short_description' ] ) . '</li>';
-
-                        $product_data[ 'short_description' ] = [];
+                foreach ( $description_data[ 'short_description' ] as $short ) {
+                    if ( count( $description_data[ 'short_description' ] ) > 10 || mb_strlen( $short ) > 250 ) {
+                        $wrong_shorts = true;
                         break;
                     }
                 }
 
-                foreach ( $product_data[ 'attributes' ] as $attribute ) {
-                    if ( mb_strlen( $attribute ) > 100 ) {
-                        foreach ( $product_data[ 'attributes' ] as $key => $value ) {
-                            $replacement .= "<li>$key: $value</li>";
-                        }
-
-                        $product_data[ 'attributes' ] = [];
+                foreach ( $description_data[ 'attributes' ] as $attribute ) {
+                    if ( mb_strlen( $attribute ) > 300 ) {
+                        $wrong_attributes = true;
                         break;
                     }
                 }
 
-                if ( StringHelper::isNotEmpty( $replacement ) ) {
-                    $split_string = preg_split( $regex, $description );
-                    $split_string[ 0 ] .= "<ul>$replacement</ul>";
-                    $description = implode( $replacement, $split_string );
+                if ( $wrong_shorts || $wrong_attributes ) {
+                    continue;
                 }
-                else {
-                    $description = (string)preg_replace( $regex, '', $description );
-                }
+
+                $description = (string)preg_replace( $regex, '', $description );
+
+                $product_data[ 'short_description' ] = array_merge( $product_data[ 'short_description' ], $description_data[ 'short_description' ] );
+                $product_data[ 'attributes' ] = array_merge( $product_data[ 'attributes' ], $description_data[ 'attributes' ] );
             }
         }
 
@@ -268,40 +274,45 @@ class FeedHelper
         ];
     }
 
-
-
-
-
     /**
-     * Gets the dimensions of the product from the line
-     * @param string $string A string containing the dimensions
-     * @param string $separator Separator, which is used to convert a string into an array with the dimensions of the product
-     * @param int $x_index Product length index
-     * @param int $y_index Product height index
-     * @param int $z_index Product width index
-     * @return array{x: float|null, y: float|null, z: float|null} An array containing the dimensions of the product
+     * Получает размеры товара из строки
+     * @param string $string Строка, содержащая размеры
+     * @param string|string[] $separator Разделитель, с помощью которого строка преобразуется в массив с размерами товара
+     * @param int $x_index Индекс длины товара
+     * @param int $y_index Индекс высоты товара
+     * @param int $z_index Индекс ширины товара
+     * @param string $measure Единица измерения (по умолчанию in - дюймы)
+     * @return array Массив, содержащий размеры товара
      */
-    public static function getDimsInString( string $string, string $separator, int $x_index = 0, int $y_index = 1, int $z_index = 2 ): array
+    #[ArrayShape( [ 'x' => "float|null", 'y' => "float|null", 'z' => "float|null" ] )]
+    public static function getDimsInString( string $string, string|array $separator, int $x_index = 0, int $y_index = 1, int $z_index = 2, string $measure = 'in' ): array
     {
-        $raw_dims = explode( $separator, $string );
+        $raw_dims = [];
+        if ( is_array( $separator ) ) {
+            foreach ( $separator as $sep ) {
+                if ( str_contains( $string, $sep ) ) {
+                    $raw_dims = explode( $sep, $string );
+                }
+            }
+        }
+        else {
+            $raw_dims = explode( $separator, $string );
+        }
 
-        $dims[ 'x' ] = isset( $raw_dims[ $x_index ] ) ? StringHelper::getFloat( $raw_dims[ $x_index ] ) : null;
-        $dims[ 'y' ] = isset( $raw_dims[ $y_index ] ) ? StringHelper::getFloat( $raw_dims[ $y_index ] ) : null;
-        $dims[ 'z' ] = isset( $raw_dims[ $z_index ] ) ? StringHelper::getFloat( $raw_dims[ $z_index ] ) : null;
-
-        return $dims;
+        return self::extractDims( $string, $raw_dims, $x_index, $y_index, $z_index, $measure );
     }
 
     /**
-     * Gets the product dimensions from a string using regular expressions
-     * @param string $string A string containing the dimensions
-     * @param array $regexes Array of regular expressions for substring search
-     * @param int $x_index Product length index
-     * @param int $y_index Product height index
-     * @param int $z_index Product width index
-     * @return array{x: float|null, y: float|null, z: float|null} An array containing the dimensions of the product
+     * Получает размеры товара из строки по регулярным выражениям
+     * @param string $string Строка, содержащая размеры
+     * @param array $regexes Массив регулярных выражений для поиска подстроки
+     * @param int $x_index Индекс длины товара
+     * @param int $y_index Индекс высоты товара
+     * @param int $z_index Индекс ширины товара
+     * @param string $measure Единица измерения (по умолчанию in - дюймы)
+     * @return array{x: float|null, y: float|null, z: float|null} Массив, содержащий размеры товара
      */
-    public static function getDimsRegexp( string $string, array $regexes, int $x_index = 1, int $y_index = 2, int $z_index = 3 ): array
+    public static function getDimsRegexp( string $string, array $regexes, int $x_index = 1, int $y_index = 2, int $z_index = 3, string $measure = 'in' ): array
     {
         $dims = [
             'x' => null,
@@ -311,11 +322,7 @@ class FeedHelper
 
         foreach ( $regexes as $regex ) {
             if ( preg_match( $regex, $string, $matches ) ) {
-                $dims[ 'x' ] = isset( $matches[ $x_index ] ) ? StringHelper::getFloat( $matches[ $x_index ] ) : null;
-                $dims[ 'y' ] = isset( $matches[ $y_index ] ) ? StringHelper::getFloat( $matches[ $y_index ] ) : null;
-                $dims[ 'z' ] = isset( $matches[ $z_index ] ) ? StringHelper::getFloat( $matches[ $z_index ] ) : null;
-
-                return $dims;
+                return self::extractDims( $string, $matches, $x_index, $y_index, $z_index, $measure );
             }
         }
 
@@ -323,35 +330,79 @@ class FeedHelper
     }
 
     /**
-     * Converts weight from grams to pounds
-     * @param float|null $g_value Weight in grams
+     * Автоматически конвертирует размер из наиболее распространенных единиц измерения в указанную
+     * @param float|null $dimension Произвольный размер товара
+     * @param string|null $string Строка, в которой находится данный размер. Необходима для получения информации об исходной единице измерения
+     * @param string $measure Единица измерения (по умолчанию in - дюймы)
      * @return float|null
      */
-    public static function convertLbsFromG( ?float $g_value ): ?float
+    public static function autoConvertDims( ?float $dimension, ?string $string, string $measure = 'in' ): ?float
+    {
+        $regexes = [
+            'mm' => '/([^a-z]|^)(mm)([^a-z]|$)/i',
+            'cm' => '/([^a-z]|^)(cm)([^a-z]|$)/i',
+            'ft' => '/([^a-z]|^)(feet|ft|\'|`)([^a-z]|$)/i',
+        ];
+
+        $coincidence = false;
+        foreach ( $regexes as $key => $regex ) {
+            if ( preg_match( $regex, $string ) ) {
+                $coincidence = true;
+                break;
+            }
+        }
+
+        $key = $coincidence ? $key : '';
+        if ( $measure === 'in' ) {
+            return match ( $key ) {
+                'mm' => self::convert( $dimension, 0.039 ),
+                'cm' => self::convert( $dimension, 0.39 ),
+                'ft' => self::convert( $dimension, 12 ),
+                default => $dimension,
+            };
+        }
+
+        return throw new InvalidArgumentException( "Invalid measure value: '$measure'" );
+    }
+
+    #[ArrayShape( [ 'x' => "float|null", 'y' => "float|null", 'z' => "float|null" ] )]
+    private static function extractDims( string $original_string, array $match_dims, int $x_index, int $y_index, int $z_index, string $measure = 'in' ): array
+    {
+        return [
+            'x' => isset( $match_dims[ $x_index ] ) ? self::autoConvertDims( StringHelper::getFloat( $match_dims[ $x_index ] ), $original_string, $measure ) : null,
+            'y' => isset( $match_dims[ $y_index ] ) ? self::autoConvertDims( StringHelper::getFloat( $match_dims[ $y_index ] ), $original_string, $measure ) : null,
+            'z' => isset( $match_dims[ $z_index ] ) ? self::autoConvertDims( StringHelper::getFloat( $match_dims[ $z_index ] ), $original_string, $measure ) : null
+        ];
+    }
+
+    /**
+     * Конвертирует вес из грамм в фунты
+     * @param float|null $g_value Вес в граммах
+     * @return float|null
+     */
+    #[Pure] public static function convertLbsFromG( ?float $g_value ): ?float
     {
         return self::convert( $g_value, 0.0022 );
     }
 
     /**
-     * Converts weight from an ounce to pounds
-     * @param float|null $g_value Weight in ounces
+     * Конвертирует вес из унции в фунты
+     * @param float|null $g_value Вес в унции
      * @return float|null
      */
-    public static function convertLbsFromOz( ?float $g_value ): ?float
+    #[Pure] public static function convertLbsFromOz( ?float $g_value ): ?float
     {
         return self::convert( $g_value, 0.063 );
     }
 
     /**
-     * Converts a number from an arbitrary unit of measurement to an arbitrary unit of measurement
-     * @param float|null $value The value of the unit of measurement to be translated
-     * @param float $contain_value The value of one unit of measurement relative to another
+     * Конвертирует число из произвольной единицы измерения в произвольную единицу измерения
+     * @param float|null $value Значение единицы измерения которую необходимо перевести
+     * @param float $contain_value Значение одной единицы измерения по отношению к другой
      * @return float|null
      */
-    public static function convert( ?float $value, float $contain_value ): ?float
+    #[Pure] public static function convert( ?float $value, float $contain_value ): ?float
     {
         return StringHelper::normalizeFloat( $value * $contain_value );
     }
-
-
 }
