@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Cache;
 class Proxy
 {
     /**
-     * @return string Returns a valid proxy address to use
+     * @return string Возвращает валидный адрес прокси для использования
      * @throws Exception
      */
     public static function getProxy(): string
@@ -36,33 +36,53 @@ class Proxy
     }
 
     /**
-     * Gets a list of available proxies via the API and puts them in the cache
-     * @return array An array of available valid proxies
+     * Получает по API список доступных прокси и помещает их в кэш
+     * @return array Массив доступных валидных прокси
      */
     private static function getProxyCheckerNetProxies(): array
     {
-        if ( $validProxies = Cache::get( 'proxies' ) ) {
-            return $validProxies;
+        if ( $valid_proxies = Cache::get( 'proxies' ) ) {
+            return $valid_proxies;
         }
 
-        $validProxies = [];
+        $valid_proxies = [];
         $total = 0;
 
         while ( !$total ) {
             $date = new DateTime( 'now' );
 
-            $url = 'https://checkerproxy.net/api/archive/' . $date->format( 'Y-m-d' );
-            if ( ( $response = self::fetchProxies( $url ) ) && $json = json_decode( $response, true ) ) {
-                foreach ( $json as $items ) {
-                    if ( (int)$items[ 'type' ] === 2 && HttpHelper::validateProxyIpPort( $items[ 'addr' ] ) ) {
-                        $validProxies[] = $items[ 'addr' ];
+            $api_urls = [
+                'https://www.proxyscan.io/download?type=https&country=all',
+                'https://api.proxyscrape.com/?request=getproxies&proxytype=http&timeout=1000&country=all&ssl=yes&anonymity=all'
+            ];
+
+            foreach ( $api_urls as $api_url ) {
+                if ( ( $response = self::fetchProxies( $api_url ) ) ) {
+                    $response = str_replace( "\r", '', $response );
+
+                    foreach ( explode( "\n", $response ) as $item ) {
+                        if ( HttpHelper::validateProxyIpPort( $item ) ) {
+                            $valid_proxies[] = $item;
+                        }
                     }
                 }
             }
-            $total = count( $validProxies );
+
+            if ( !count( $valid_proxies ) ) {
+                $url = 'https://checkerproxy.net/api/archive/' . $date->format( 'Y-m-d' );
+                if ( ( $response = self::fetchProxies( $url ) ) && $json = json_decode( $response, true ) ) {
+                    foreach ( $json as $items ) {
+                        if ( (int)$items[ 'type' ] === 2 && HttpHelper::validateProxyIpPort( $items[ 'addr' ] ) ) {
+                            $valid_proxies[] = $items[ 'addr' ];
+                        }
+                    }
+                }
+            }
+
+            $total = count( $valid_proxies );
         }
-        return Cache::remember( 'proxies', 6 * 60, function () use ( $validProxies ) {
-            return $validProxies;
+        return Cache::remember( 'proxies', 6 * 60, function () use ( $valid_proxies ) {
+            return $valid_proxies;
         } );
     }
 
@@ -70,6 +90,10 @@ class Proxy
     {
         echo "Get proxies list $url \n";
         $c = new Client();
-        return $c->get( $url )->getBody()->getContents();
+        try {
+            return $c->get( $url )->getBody()->getContents();
+        } catch ( Exception ) {
+            return '';
+        }
     }
 }

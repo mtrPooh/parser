@@ -18,11 +18,28 @@ class ParserCrawler extends Crawler
      */
     public function filter( string $selector, ?int $index = null ): ParserCrawler
     {
-        if ( $index !== null ) {
-            return parent::filter( $selector )->eq( $index );
+        if ( str_starts_with( $selector, '/' ) ) {
+            $filter = 'filterXPath';
+            $selector = '/' . $selector;
+        }
+        else {
+            $filter = 'filter';
         }
 
-        return parent::filter( $selector );
+        if ( $index !== null ) {
+            return parent::$filter( $selector )->eq( $index );
+        }
+        return parent::$filter( $selector );
+    }
+
+    /**
+     * know have element children matches by selector
+     * @param string $selector
+     * @return bool
+     */
+    public function exists( string $selector ): bool
+    {
+        return (bool)$this->filter( $selector )->count();
     }
 
     /**
@@ -32,8 +49,7 @@ class ParserCrawler extends Crawler
      */
     public function getText( string $selector ): string
     {
-        $elem = $this->filter( $selector );
-        return $elem->count() ? html_entity_decode( $elem->text() ) : '';
+        return $this->exists( $selector ) ? html_entity_decode( $this->filter( $selector )->text() ) : '';
     }
 
     /**
@@ -116,15 +132,6 @@ class ParserCrawler extends Crawler
         return $this->filter( $selector )->each( static fn( ParserCrawler $node ) => $node->image()->getUri() );
     }
 
-    /**
-     * know have element children matches by selector
-     * @param string $selector
-     * @return bool
-     */
-    public function exists( string $selector ): bool
-    {
-        return (bool)$this->filter( $selector )->count();
-    }
 
     public function addContent( string $content, string $type = null ): void
     {

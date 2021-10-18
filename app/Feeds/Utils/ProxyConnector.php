@@ -32,7 +32,11 @@ class ProxyConnector
 
     private function callConnect( HttpDownloader $downloader, Link $link ): bool
     {
-        $downloader->getClient()->setRequestTimeOut( 10 );
+        $client = clone $downloader->getClient();
+
+        $downloader->setTimeOut( 10 );
+        $downloader->removeCookies();
+        $downloader->removeHeaders();
 
         $connection = false;
         $proxy = Proxy::getProxy();
@@ -56,7 +60,7 @@ class ProxyConnector
         }
         elseif ( $response = $exception->getResponse() ) {
             $status = $response->getStatusCode();
-            if ( in_array( $status, [ 200, 404 ], true ) ) {
+            if ( in_array( $status, [ 200, 404 ], true ) && $response->getBody()->getContents() ) {
                 $connection = true;
                 print PHP_EOL . "Use proxy: $proxy" . PHP_EOL;
             }
@@ -64,7 +68,8 @@ class ProxyConnector
                 print PHP_EOL . 'Proxy response code: ' . $status . PHP_EOL;
             }
         }
-        $downloader->getClient()->setRequestTimeOut( $downloader->timeout_s );
+        $downloader->setClient( $client );
+        $downloader->setTimeOut( 60 );
         return $connection;
     }
 }

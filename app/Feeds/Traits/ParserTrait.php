@@ -6,6 +6,7 @@ use App\Feeds\Feed\FeedItem;
 use App\Feeds\Processor\AbstractProcessor;
 use App\Feeds\Utils\Data;
 use DateTime;
+use JetBrains\PhpStorm\Pure;
 
 trait ParserTrait
 {
@@ -117,12 +118,12 @@ trait ParserTrait
         return $this->getMpn() ? $this->vendor->getPrefix() . $this->getMpn() : '';
     }
 
-    public function getInternalId(): string
+    #[Pure] public function getInternalId(): string
     {
         return method_exists($this, 'getUri') ? $this->getUri() : '';
     }
 
-    public function getDescription(): string
+    #[Pure] public function getDescription(): string
     {
         return $this->getProduct();
     }
@@ -138,9 +139,9 @@ trait ParserTrait
     }
 
     /**
-     * @return mixed
+     * @return array|null
      */
-    public function getData()
+    public function getData(): ?array
     {
         return $this->data;
     }
@@ -149,7 +150,7 @@ trait ParserTrait
      * @param mixed $data
      * @return ParserTrait
      */
-    public function setData( $data )
+    public function setData( $data ): static
     {
         $this->data = $data;
         return $this;

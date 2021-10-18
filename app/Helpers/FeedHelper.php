@@ -16,14 +16,18 @@ class FeedHelper
      */
     public static function cleanProductDescription( string $description ): string
     {
-        if ( StringHelper::isNotEmpty( $description ) ) {
+        if ( $description !== 'Dummy' && StringHelper::isNotEmpty( $description ) ) {
             $description = self::cleanProductData( $description );
             $description = StringHelper::cutTagsAttributes( $description );
             $description = str_replace( [ '<div>', '</div>' ], [ '<p>', '</p>' ], html_entity_decode( StringHelper::removeSpaces( $description ) ) );
+            $description = (string)preg_replace( [ '/((\s+)?<p>(\s+)?)+/', '/((\s+)?<\/p>(\s+)?)+/' ], [ '<p>', '</p>' ], $description );
             $description = (string)preg_replace( '/<h[\d]?>(.*?)<\/h[\d]?>/', '<b>$1</b><br>', $description );
 
             /** Удаляет пустые теги из описания товара **/
             $description = StringHelper::cutEmptyTags( StringHelper::cutTags( $description ) );
+
+            /** Закрывает все не закрытые html теги **/
+            $description = ( new ParserCrawler( $description ) )->getHtml( 'body' );
         }
         return $description;
     }
@@ -190,7 +194,7 @@ class FeedHelper
             '(Product[s]?|Key)?(\s+)?Benefit[s]?',
             '(Product[s]?|Key)?(\s+)?Feature[s]?',
             '(Product[s]?)?(\s+)?Detail[s]?',
-            'Features & Benefits',
+            'Features &(amp;)? Benefits',
         ];
 
         $regexes_list = [

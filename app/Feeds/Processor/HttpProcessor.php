@@ -26,8 +26,8 @@ abstract class HttpProcessor extends AbstractProcessor
     }
 
     /**
-     * Clears the array of links that do not lead to product pages
-     * Used in app/Feeds/Processor/AbstractProcessor::getProductLinks
+     * Очищает массив от ссылок, не ведущих на страницы товаров
+     * Используется в app/Feeds/Processor/AbstractProcessor::getProductLinks
      * @param Link $link
      * @return bool
      */

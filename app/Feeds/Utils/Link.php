@@ -5,27 +5,27 @@ namespace App\Feeds\Utils;
 class Link
 {
     /**
-     * @var string The URL of the link to which the request will be sent
+     * @var string Адрес ссылки на который будет отправлен запрос
      */
     private string $url;
     /**
-     * @var string Method for sending the request
+     * @var string Метод отправки запроса
      */
     private string $method;
     /**
-     * @var array Request parameters
+     * @var array Параметры запроса
      */
     private array $params;
     /**
-     * @var string Type of sending request parameters
-     * For a GET request, this is a query_string
-     * For a POST request, this is form_data or request_payload (the RESTAPI request body)
-     * If the value is "default", the POST request parameters will be sent as form_data
-     * GET request parameters with any value will be sent as query_string
+     * @var string Тип отправки параметров запроса
+     * Для GET запроса - это query_string
+     * Для POST запроса - это form_data или request_payload (тело RESTAPI запроса)
+     * При значении "default" параметры POST запроса будут отправлены как form_data
+     * Параметры GET запроса при любом значении будут отправлены как query_string
      */
     private string $type_params;
     /**
-     * @var bool Link visit status. False if the link was not visited by the loader
+     * @var bool Статус посещения ссылки. False если ссылка не была посещена загрузчиком
      */
     private bool $visited = false;
 
@@ -34,13 +34,16 @@ class Link
         $this->method = strtoupper( $method );
         $this->type_params = $type_params;
 
-        if ( $this->method === 'GET' && ( $params_start_with = strpos( $url, '?' ) ) !== false ) {
-            $query_string = substr( $url, $params_start_with + 1 );
+        $url_info = parse_url( $url );
+        if ( $this->method === 'GET' && !empty( $url_info[ 'query' ] ) ) {
+            $url = str_replace( '?' . $url_info[ 'query' ], '', $url );
 
-            $url = substr( $url, 0, $params_start_with );
-            preg_match_all( '/([^&=]*)=([^&=]*)/', $query_string, $matches );
-            $get_params = array_combine( $matches[ 1 ], $matches[ 2 ] );
-            $params = array_merge( $params ?? [], $get_params );
+            $raw_query = explode( '&', $url_info[ 'query' ] );
+            foreach ( $raw_query as $query ) {
+                $raw_query_value = explode( '=', $query, 2 );
+
+                $params[ $raw_query_value[ 0 ] ?? '' ] = $raw_query_value[ 1 ] ?? '';
+            }
         }
 
         $this->url = trim( $url );
@@ -48,7 +51,7 @@ class Link
     }
 
     /**
-     * Sets a new url
+     * Устанавливает новый url адрес
      * @param string $url
      * @return Link
      */
@@ -59,7 +62,7 @@ class Link
     }
 
     /**
-     * Returns the current url
+     * Возвращает текущий url адрес
      * @return string
      */
     public function getUrl(): string
@@ -71,12 +74,12 @@ class Link
                 array_keys( $this->params ),
                 array_values( $this->params )
             );
-            $url .= '?' . implode( '&', $get_params );
+            $url .= '?' . rtrim( implode( '&', $get_params ), '=' );
         }
         return $url;
     }
 
-    /** Sets a new method for sending the request
+    /** Устанавливает новый метод отправки запроса
      * @param string $method
      * @return Link
      */
@@ -90,7 +93,7 @@ class Link
     }
 
     /**
-     * @return string Returns the current method of sending the request
+     * @return string Возвращает текущий метод отправки запроса
      */
     public function getMethod(): string
     {
@@ -98,7 +101,7 @@ class Link
     }
 
     /**
-     * Sets a new set of parameters
+     * Устанавливает новый набор параметров
      * @param array $params
      * @return Link
      */
@@ -109,7 +112,7 @@ class Link
     }
 
     /**
-     * @return array Returns a set of parameters
+     * @return array Возвращает набор параметров
      */
     public function getParams(): array
     {
@@ -120,7 +123,7 @@ class Link
     }
 
     /**
-     * @param string $type Sets a new type for sending request parameters
+     * @param string $type Устанавливает новый тип отправки параметров запроса
      * @return $this
      */
     public function setTypeParams( string $type ): self
@@ -130,7 +133,7 @@ class Link
     }
 
     /**
-     * @return string Returns the current type of sending request parameters
+     * @return string Возвращает текущий тип отправки параметров запроса
      */
     public function getTypeParams(): string
     {
@@ -138,7 +141,7 @@ class Link
     }
 
     /**
-     * @return bool Returns the status of the link visit
+     * @return bool Возвращает статус посещения ссылки
      */
     public function isVisited(): bool
     {
@@ -146,7 +149,7 @@ class Link
     }
 
     /**
-     * @param bool $visited Sets the status of the link visit
+     * @param bool $visited Устанавливает статус посещения ссылки
      * @return Link
      */
     public function setVisited( bool $visited = true ): self

@@ -5,15 +5,15 @@ namespace App\Feeds\Processor;
 use App\Feeds\Downloader\HttpDownloader;
 use App\Feeds\Feed\FeedItem;
 use App\Feeds\Feed\FeedValidate;
-use App\Feeds\Parser\ParserInterface;
-use App\Feeds\Parser\XLSNParser;
+use App\Feeds\Interfaces\DxRepositoryInterface;
+use App\Feeds\Interfaces\ParserInterface;
 use App\Feeds\Storage\AbstractFeedStorage;
 use App\Feeds\Storage\FileStorage;
 use App\Feeds\Utils\Collection;
 use App\Feeds\Utils\Data;
 use App\Feeds\Utils\Link;
 use App\Feeds\Utils\ParserCrawler;
-use App\Repositories\DxRepositoryInterface;
+use App\Helpers\FeedHelper;
 use DateTime;
 use Exception;
 use Ms48\LaravelConsoleProgressBar\Facades\ConsoleProgressBar;
@@ -28,6 +28,42 @@ use Ms48\LaravelConsoleProgressBar\Facades\ConsoleProgressBar;
  */
 abstract class AbstractProcessor
 {
+    /**
+     * Указывает номера листов, которые должен обработать прайс-парсер.
+     * Используется в том случае, если прайс-лист содержит несколько листов с необходимой информацией
+     *
+     * Для этого необходимо указать массив чисел, например
+     * public const PRICE_ACTIVE_SHEET = [0, 1, 2]
+     * в котором каждый ключ является идентификатором листа в таблице,
+     * а значение каждого ключа является идентификатором парсера с именем вида Price<число из массива>Parser
+     */
+    public const PRICE_ACTIVE_SHEET = [ 0 ];
+
+    /**
+     * Указывает номера файлов, отсортированных в алфавитном порядке, которые должен обработать прайс-парсер.
+     * Используется в том случае, если необходимо обработать несколько прайс-листов
+     *
+     * Аналогично PRICE_ACTIVE_SHEET необходимо указать массив, в котором ключи являются идентификаторами прайс-листов в хранилище,
+     * а значение каждого ключа является идентификатором парсера
+     */
+    public const PRICE_ACTIVE_FILES = [ 0 ];
+
+    /**
+     * Указывает номера листов, которые должен обработать прайс-парсер в каждом используемом прайс-листе.
+     * Используется в том случае, если необходимо обработать несколько прайс-листов и эти прайс-листы содержат несколько страниц с информацией
+     *
+     * Для этого необходимо указать в массиве идентификаторы страниц для каждого прайс-листа
+     * public const PRICE_ACTIVE_MULTIPLE_SHEET = [ [ 0, 1, 2, 3 ], [ 0, 1, 2 ] ]
+     *
+     * А также в константе PRICE_ACTIVE_FILES указать какие файлы нужно обработать
+     * public const PRICE_ACTIVE_FILES = [ 1, 2 ]
+     *
+     * В этом случае названия парсеров с нулевыми индексами будут выглядеть как раньше, а все остальные будут разделены "_"
+     * Например PriceParser, Price_1Parser, Price_2Parser, Price1Parser, Price1_1Parser, Price1_2Parser
+     *
+     * PriceParser - парсер первой страницы в первом файле. Price_1Parser - парсер второй страницы в первом файле.
+     * Price1Parser - парсер первой страницы во втором файле. Price1_1Parser - парсер второй страницы во втором файле.
+     */
     public const PRICE_ACTIVE_MULTIPLE_SHEET = [];
 
     public const FEED_TYPE_INVENTORY = 'inventory';
@@ -89,11 +125,31 @@ abstract class AbstractProcessor
     /**
      * @var array Массив url адресов товаров, которые должен обработать парсер, чтобы не парсить весь сайт
      * Используется только для тестирования работоспособности парсера
-     * Перед отправкой парсера в продакшен необходимо удалить данное свойство
+     * Перед отправкой парсера в продакшн необходимо удалить данное свойство
      */
     public array $custom_products = [];
     public array $dx_info = [];
-
+    /**
+     * @var array Параметры для авторизации
+     *
+     * 'check_login_text' => 'Log Out' - Проверочное слово, которое отображается только авторизованным пользователям (Log Out, My account и прочие).
+     * 'auth_url' => 'https://www.authorise_uri.com/login' - Url адрес на который отправляется запрос для авторизации.
+     * 'auth_form_url' => 'https://www.authorise_uri.com/login' - Url адрес страницы, на которой находится форма авторизации.
+     * 'auth_info' => [] - Массив параметров для авторизации, содержит в себе все поля, которые были отправлены браузером для авторизации.
+     * 'find_fields_form' => true|false - Указывает искать дополнительные поля формы авторизации перед отправкой запроса
+     * Если этот параметр будет опущен, система сочтет его значение как "true"
+     * 'api_auth' => true|false - Указывает в каком виде отправлять параметры формы авторизации ("request_payload" или "form_data")
+     * Если этот параметр будет опущен, система сочтет его значение как "false".
+     * По умолчанию параметры отправляются, как обычные поля формы
+     *
+     * Пример содержания auth_info:
+     * 'auth_info' => [
+     *     'login[username]' => 'login',
+     *     'login[password]' => 'password',
+     * ],
+     * Значения 'login' и 'password' автоматически заменяются актуальными логином и паролем для авторизации на сайте
+     * Это сделано для автоматического обновления данных при их изменении
+     */
     protected array $params = [
         'check_login_text' => '',
         'auth_url' => '',
@@ -103,25 +159,25 @@ abstract class AbstractProcessor
     protected array $first = [];
     protected array $headers = [];
     /**
-     * @var int|null количество товаров, которое должен собрать парсер, чтобы не парсить весь сайт
+     * @var int|null Количество товаров, которое должен собрать парсер, чтобы не парсить весь сайт
      * Используется только для тестирования работоспособности парсера
-     * Перед отправкой парсера в продакшен необходимо удалить данное свойство
+     * Перед отправкой парсера в продакшн необходимо удалить данное свойство
      */
     protected ?int $max_products = null;
     protected Collection $process_queue;
+    /**
+     * @var bool Нужно сбросить хэш товара или нет
+     */
+    private bool $force = false;
 
-    public function __construct(
-        string                $code = null,
-        DxRepositoryInterface $dxRepo = null,
-        AbstractFeedStorage   $storage = null
-    )
+    public function __construct( string $code = null, DxRepositoryInterface $dxRepo = null, AbstractFeedStorage $storage = null )
     {
         if ( $code && $dxRepo ) {
             //мультифиды на разные магазины
             $codeSplit = explode( '__', $code );
             //Замена в префиксе Dx _ на -
             $code = str_replace( '_', '-', $codeSplit[ 0 ] );
-            $this->dx_info = $dxRepo->get( $code, $codeSplit[ 1 ] ?? null );
+            $this->dx_info = $dxRepo->getDxInfo( $code, $codeSplit[ 1 ] ?? '' );
         }
         if ( $storage ) {
             $this->storage = $storage;
@@ -167,8 +223,18 @@ abstract class AbstractProcessor
         return $this->downloader;
     }
 
+    public function setForce( bool $force ): void
+    {
+        $this->force = $force;
+    }
+
+    public function getForce(): bool
+    {
+        return $this->force;
+    }
+
     /**
-     * Возврает все ссылки на страницы категорий, которые были найденны по селекторам, указанным в константе "CATEGORY_LINK_CSS_SELECTORS"
+     * Возвращает все ссылки на страницы категорий, которые были найдены по селекторам, указанным в константе "CATEGORY_LINK_CSS_SELECTORS"
      * @param Data $data Html разметка загружаемой страницы
      * @param string $url url адрес загружаемой страницы
      * @return array Массив ссылок, содержащий объекты app/Feeds/Utils/Link
@@ -187,7 +253,7 @@ abstract class AbstractProcessor
     }
 
     /**
-     * Возврает все ссылки на страницы товаров, которые были найденны по селекторам, указанным в константе "PRODUCT_LINK_CSS_SELECTORS"
+     * Возвращает все ссылки на страницы товаров, которые были найдены по селекторам, указанным в константе "PRODUCT_LINK_CSS_SELECTORS"
      * @param Data $data Html разметка загружаемой страницы
      * @param string $url url адрес загружаемой страницы
      * @return array Массив ссылок, содержащий объекты app/Feeds/Utils/Link
@@ -284,7 +350,7 @@ abstract class AbstractProcessor
 
     /**
      * @param int $max_products Устанавливает максимальное количество товаров, которое должен собрать парсер, чтобы не парсить весь сайт
-     * Используетсяя только для тестирования работоспособности парсера
+     * Используется только для тестирования работоспособности парсера
      */
     public function setMaxProducts( int $max_products ): void
     {
@@ -325,7 +391,7 @@ abstract class AbstractProcessor
 
     /**
      * Производит слияние товаров, взятых из прайс-листа и с сайта
-     * У товаров, взятых с сайта приоритет ниже, поэтому информация из прай-листа заменит собой информацию с сайта
+     * У товаров, взятых с сайта приоритет ниже, поэтому информация из прайс-листа заменит собой информацию с сайта
      * За исключением нескольких полей
      * @param FeedItem[] $feed_target
      * @param FeedItem[] $feed_source
@@ -346,7 +412,7 @@ abstract class AbstractProcessor
                         switch ( $name ) {
                             case 'product':
                             case 'fulldescr':
-                                if ( $fi_target->$name !== XLSNParser::DUMMY_PRODUCT_NAME ) {
+                                if ( $fi_target->$name !== ParserInterface::DEFAULT_PRODUCT_NAME ) {
                                     continue 2;
                                 }
                                 break;
@@ -365,11 +431,13 @@ abstract class AbstractProcessor
                                     continue 2;
                                 }
                                 break;
-                            case 'brand':
+                            case 'brand_name':
                                 if ( $fi_target->$name ) {
                                     continue 2;
                                 }
                                 break;
+                            case 'hash_product':
+                                continue 2;
                         }
                         $fi_target->$name = $source_value;
                     }
@@ -497,7 +565,7 @@ abstract class AbstractProcessor
             }
 
             if ( $this->isDevMode() ) {
-                new FeedValidate( $this->feed_items, $this->dx_info );
+                new FeedValidate( $this->feed_items, $this->dx_info, $this->getFeedType() );
             }
 
             $this->storage->saveFeed( $this, $this->feed_items );

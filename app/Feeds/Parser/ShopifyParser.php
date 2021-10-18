@@ -4,6 +4,8 @@ namespace App\Feeds\Parser;
 
 use App\Feeds\Feed\FeedItem;
 use App\Helpers\StringHelper;
+use Exception;
+use JetBrains\PhpStorm\Pure;
 
 abstract class ShopifyParser extends HtmlParser
 {
@@ -11,22 +13,32 @@ abstract class ShopifyParser extends HtmlParser
     protected const MIN_PRICE = null;
     protected const EF_PARSE_PRODUCT_JSON = 'Cannot parse json: %s';
 
+    /**
+     * @throws Exception
+     */
     protected function getMeta(): void
     {
         if ( $this->node->count() ) {
-            $html = str_replace( [ '&quot;', '\"' ], [ '"', '&qout;' ], $this->node->html() );
-            if ( preg_match_all( '/{"id":\d+,"title":".*?","handle":".*?","description":".*?".*?,"price":\d+,"price_min":\d+,"price_max":\d+,"available":[a-z]+,"price_varies":[a-z]+,"compare_at_price":([a-z]+|\d+),"compare_at_price_min":\d+,"compare_at_price_max":\d+,"compare_at_price_varies":[a-z]+,"variants":\[.*?],"content":".*?"}/', $html, $matches ) ) {
-                if ( count( $matches[ 0 ] ) && count( array_unique( $matches[ 0 ] ) ) > 1 ) {
-                    $products = array_filter( array_map( static fn( $product_json ) => json_decode( str_replace( '&quot;', '\"', $product_json ), true, 512, JSON_THROW_ON_ERROR ), $matches[ 0 ] ) );
+            $html = str_replace( [ '&quot;', '\"' ], [ '"', '&quot;' ], $this->node->html() );
+            $shopify_regex = '/{"id":\d+,"title":".*?","handle":".*?","description":".*?".*?,"price":\d+,"price_min":\d+,"price_max":\d+,"available":[a-z]+,"price_varies":[a-z]+,"compare_at_price":([a-z]+|\d+),"compare_at_price_min":\d+,"compare_at_price_max":\d+,"compare_at_price_varies":[a-z]+,"variants":\[.*?],"content":".*?"}/';
+            if ( preg_match_all( $shopify_regex, $html, $matches_all ) ) {
+                if ( count( $matches_all[ 0 ] ) && count( array_unique( $matches_all[ 0 ] ) ) > 1 ) {
+                    $products = array_filter( array_map( static fn( $product_json ) => json_decode( str_replace( '&quot;', '\"', $product_json ), true, 512, JSON_THROW_ON_ERROR ), $matches_all[ 0 ] ) );
                     array_map( function ( array $product ) {
-                        if ( $this->getAttr( 'meta[property="og:title"]', 'content' ) === $product[ 'title' ] ) {
+                        if (
+                            $this->getAttr( 'meta[property="og:title"]', 'content' ) === $product[ 'title' ] ||
+                            $this->getAttr( 'meta[name="twitter:title"]', 'content' ) === $product[ 'title' ]
+                        ) {
                             $this->meta = $product;
                         }
                     }, $products );
                 }
                 else {
-                    $this->meta = json_decode( str_replace( '&quot;', '\"', $matches[ 0 ][ 0 ] ), true, 512, JSON_THROW_ON_ERROR ) ?? [];
+                    $this->meta = json_decode( str_replace( '&quot;', '\"', $matches_all[ 0 ][ 0 ] ), true, 512, JSON_THROW_ON_ERROR ) ?? [];
                 }
+            }
+            elseif ( preg_match( $shopify_regex, $html, $matches ) ) {
+                $this->meta = json_decode( str_replace( '&quot;', '\"', $matches[ 0 ] ), true, 512, JSON_THROW_ON_ERROR ) ?? [];
             }
             else {
                 print PHP_EOL . sprintf( self::EF_PARSE_PRODUCT_JSON, $this->getUri() ) . PHP_EOL;
@@ -85,12 +97,12 @@ abstract class ShopifyParser extends HtmlParser
         return parent::getAvail();
     }
 
-    public function getInternalId(): string
+    #[Pure] public function getInternalId(): string
     {
         return $this->getUri();
     }
 
-    public function getDescription(): string
+    #[Pure] public function getDescription(): string
     {
         return $this->meta ? ( $this->meta[ 'description' ] ?? '' ) : parent::getDescription();
     }
@@ -111,7 +123,7 @@ abstract class ShopifyParser extends HtmlParser
         return parent::getListPrice();
     }
 
-    public function getForsale(): string
+    #[Pure] public function getForsale(): string
     {
         if ( $this->meta ) {
             return $this->meta[ 'type' ] === 'discontinued' ? 'N' : parent::getForsale();
@@ -132,6 +144,11 @@ abstract class ShopifyParser extends HtmlParser
         return str_replace( ' ', '', $mpn );
     }
 
+    /**
+     * @param $variants
+     * @param FeedItem $item
+     * @return FeedItem[]
+     */
     public function parseVariations( $variants, FeedItem $item ): array
     {
         $child_products = $qtys = [];
@@ -152,9 +169,11 @@ abstract class ShopifyParser extends HtmlParser
             $child_item->setBrandNormalized( $this->getBrandNormalized() );
             $child_item->setWeight( round( $variant[ 'weight' ] / 100, 2 ) );
             $child_item->setSupplierInternalId( $item->getSupplierInternalId() );
+            $child_item->setShortdescr( array_map( static fn( string $short ) => strip_tags( $short ), explode( '</li>', $item->getShortdescr() ) ) );
             $child_item->setFulldescr( $item->getFulldescr() );
             $child_item->setCategories( $item->getCategories() );
             $child_item->setForsale( $this->getForsale() );
+            $child_item->setAttributes( $item->getAttributes() );
 
             $avail = $variant[ 'available' ] ? 1000 : 0;
             if ( isset( $variant[ 'inventory_quantity' ] ) ) {
@@ -172,11 +191,11 @@ abstract class ShopifyParser extends HtmlParser
             }
 
             $cost = (float)$variant[ 'price' ] / 100;
-            if ( $cost <= 0 ) {
-                $cost = 10000;
+            if ( $cost < 0 ) {
+                $cost = 0;
             }
 
-            if ( static::DISCOUNT !== null ) {
+            if ( static::DISCOUNT !== null && $cost > 0 ) {
                 $child_item->setCostToUs( round( $cost * static::DISCOUNT, 2 ) );
             }
             else {
@@ -204,6 +223,10 @@ abstract class ShopifyParser extends HtmlParser
         return $child_products;
     }
 
+    /**
+     * @param FeedItem $parent_fi
+     * @return FeedItem[]
+     */
     public function getChildProducts( FeedItem $parent_fi ): array
     {
         $child_products = [];
@@ -221,10 +244,10 @@ abstract class ShopifyParser extends HtmlParser
             $images = [ $this->meta[ 'featured_image' ] ];
         }
 
-        return array_map( static fn( $url ) => "https:{$url}", $images );
+        return array_map( static fn( $url ) => "https:$url", $images );
     }
 
-    public function getCategories(): array
+    #[Pure] public function getCategories(): array
     {
         return $this->meta ? $this->meta[ 'tags' ] : parent::getCategories();
     }

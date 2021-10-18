@@ -7,6 +7,7 @@ use App\Feeds\Utils\HttpClient;
 use App\Feeds\Utils\Link;
 use App\Feeds\Utils\ParserCrawler;
 use App\Feeds\Utils\ProxyConnector;
+use App\Feeds\Interfaces\DownloaderInterface;
 use App\Helpers\HttpHelper;
 use Exception;
 use GuzzleHttp\Exception\RequestException;
@@ -15,7 +16,7 @@ use GuzzleHttp\Psr7\Response;
 use JetBrains\PhpStorm\ArrayShape;
 use JetBrains\PhpStorm\Pure;
 
-class HttpDownloader
+class HttpDownloader implements DownloaderInterface
 {
     /**
      * @var HttpClient Асинхронный HTTP клиент
@@ -114,15 +115,19 @@ class HttpDownloader
     }
 
     /**
-     * @return void Устанавливает объект асинхронного http клиента
+     * Устанавливает объект асинхронного http клиента
+     * @param HttpClient $client
+     * @return HttpDownloader
      */
-    public function setClient( HttpClient $client ): void
+    public function setClient( HttpClient $client ): HttpDownloader
     {
         $this->client = $client;
+        return $this;
     }
 
     /**
-     * @return HttpClient Возвращает объект асинхронного http клиента
+     * Возвращает объект асинхронного http клиента
+     * @return HttpClient
      */
     public function getClient(): HttpClient
     {
@@ -130,11 +135,13 @@ class HttpDownloader
     }
 
     /**
-     * @param bool $static_agent Устанавливает использовать статичный user-agent или нет
+     * @param bool $static_agent
+     * @return HttpDownloader
      */
-    public function setStaticUserAgent( bool $static_agent ): void
+    public function setStaticUserAgent( bool $static_agent ): HttpDownloader
     {
         $this->static_user_agent = $static_agent;
+        return $this;
     }
 
     /**
@@ -146,52 +153,67 @@ class HttpDownloader
     }
 
     /**
-     * @param bool $use_proxy Устанавливает использовать прокси или нет
+     * @param bool $use_proxy
+     * @return HttpDownloader
      */
-    public function setUseProxy( bool $use_proxy ): void
+    public function setUseProxy( bool $use_proxy ): HttpDownloader
     {
         $this->use_proxy = $use_proxy;
+        return $this;
     }
 
     /**
-     * @param string $user_agent Устанавливает значение user-agent
+     * @param string $user_agent
+     * @return HttpDownloader
      */
-    public function setUserAgent( string $user_agent ): void
+    public function setUserAgent( string $user_agent ): HttpDownloader
     {
         $this->user_agent = $user_agent;
+        return $this;
     }
 
     /**
-     * @param float $timeout Устанавливает время ожидания отклика на запрос
+     * Устанавливает время ожидания отклика на запрос
+     * @param float $timeout
+     * @return HttpDownloader
      */
-    public function setTimeOut( float $timeout ): void
+    public function setTimeOut( float $timeout ): HttpDownloader
     {
         $this->getClient()->setRequestTimeOut( $timeout * 1000 );
+        return $this;
     }
 
     /**
      * Устанавливает лимит попыток подключения к прокси серверу
      * @param int $limit
+     * @return HttpDownloader
      */
-    public function setConnectLimit( int $limit ): void
+    public function setConnectLimit( int $limit ): HttpDownloader
     {
         $this->connect_limit = $limit;
+        return $this;
     }
 
     /**
-     * @param float $delay Устанавливает задержку между запросами
+     * Устанавливает задержку между запросами
+     * @param float $delay
+     * @return HttpDownloader
      */
-    public function setDelay( float $delay ): void
+    public function setDelay( float $delay ): HttpDownloader
     {
         $this->delay_s = $delay * 1000000;
+        return $this;
     }
 
     /**
-     * @param array $params Устанавливает параметры авторизации
+     * Устанавливает параметры авторизации
+     * @param array $params
+     * @return HttpDownloader
      */
-    public function setParams( array $params ): void
+    public function setParams( array $params ): HttpDownloader
     {
         $this->params = $params;
+        return $this;
     }
 
     /**

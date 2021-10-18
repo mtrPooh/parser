@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 class FileStorage extends AbstractFeedStorage
 {
     private const FEED_FILE_EXTENSION = 'json';
+
     public function saveFeed( AbstractProcessor $processor, array $items ): void
     {
         $this->processor = $processor;
@@ -16,6 +17,9 @@ class FileStorage extends AbstractFeedStorage
             $json = $this->prepareJSON( $items );
 
             Storage::disk( 'local' )->put( $this->getFileName( self::FEED_FILE_EXTENSION ), $json );
+            if ( !$this->processor->isDevMode() ) {
+                Storage::disk( 's3' )->put( $this->getFileName( self::FEED_FILE_EXTENSION ), $json );
+            }
 
             $this->saveMd5( md5( $json ) );
         }
@@ -24,7 +28,10 @@ class FileStorage extends AbstractFeedStorage
     private function saveMd5( $md5 ): void
     {
         Storage::disk( 'local' )->put( $this->getFileName( 'md5' ), $md5 );
-            }
+        if ( !$this->processor->isDevMode() ) {
+            Storage::disk( 's3' )->put( $this->getFileName( 'md5' ), $md5 );
+        }
+    }
 
     private function getDefaults(): array
     {
@@ -88,10 +95,10 @@ class FileStorage extends AbstractFeedStorage
             $feed = reset( $feeds );
             if ( $file = $feed[ 'feed_file_name' ] ?? null ) {
                 $path = pathinfo( $file );
-                $result = "{$path['filename']}.{$ext}";
+                $result = "{$path['filename']}.$ext";
             }
         }
-        return $result ?? "feed{$this->processor->getSupplierId()}{$this->processor->getFeedType()[0]}.{$ext}";
+        return $result ?? "feed{$this->processor->getSupplierId()}{$this->processor->getFeedType()[0]}.$ext";
     }
 
     private function getCountItems( array $items ): int

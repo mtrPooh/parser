@@ -3,6 +3,7 @@
 namespace App\Feeds\Parser;
 
 use App\Feeds\Feed\FeedItem;
+use App\Feeds\Interfaces\ParserInterface;
 use App\Feeds\Traits\ParserTrait;
 use App\Feeds\Utils\Data;
 use App\Feeds\Utils\ParserCrawler;
@@ -28,11 +29,11 @@ abstract class HtmlParser implements ParserInterface
      */
     private ?string $uri = null;
     /**
-     * @var array meta-information of the site, stores additional info. for the website
+     * @var array Мета-информация сайта, хранит доп. информацию для сайта
      */
     protected array $meta = [];
     /**
-     * @var ParserCrawler Abstraction over Symfony\Component\DomCrawler\Crawler
+     * @var ParserCrawler Абстракция над Symfony\Component\DomCrawler\Crawler
      */
     protected ParserCrawler $node;
 
