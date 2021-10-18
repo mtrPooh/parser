@@ -5,20 +5,23 @@ namespace App\Feeds\Feed;
 use App\Helpers\FeedHelper;
 use App\Helpers\StringHelper;
 use Illuminate\Support\Facades\Storage;
-use Ms48\LaravelConsoleProgressBar\Facades\ConsoleProgressBar;
+use JetBrains\PhpStorm\Pure;
+use Ms48\LaravelConsoleProgressBar\ConsoleProgressBar;
 
 class FeedValidate
 {
     protected FeedItem $current_item;
     private string $dx;
+    private string $feed_type;
     private array $fails = [];
 
     private bool $fail = false;
 
-    public function __construct( array $feed_items, $dx_info )
+    public function __construct( array $feed_items, array $dx_info, string $feed_type )
     {
         print PHP_EOL . 'Validate feeds' . PHP_EOL;
         $this->dx = rtrim( $dx_info[ 'prefix' ], '-' );
+        $this->feed_type = $feed_type;
 
         $this->validateItems( $feed_items );
         if ( $this->fail ) {
@@ -33,6 +36,7 @@ class FeedValidate
 
     private function validateItems( array $feed_items ): void
     {
+        $console = new ConsoleProgressBar();
         $count_items = 1;
         foreach ( $feed_items as $feed_item ) {
             if ( $feed_item->isGroup() && count( $feed_item->getChildProducts() ) ) {
@@ -40,15 +44,15 @@ class FeedValidate
                 foreach ( $feed_item->getChildProducts() as $child_item ) {
                     $this->validateItem( $child_item );
                 }
-                ConsoleProgressBar::showProgress( count( $feed_item->getChildProducts() ), $count_items );
+                $console->showProgress( count( $feed_item->getChildProducts() ), $count_items );
             }
             else {
                 ++$count_items;
-                ConsoleProgressBar::showProgress( 1, $count_items );
+                $console->showProgress( 1, $count_items );
             }
             $this->validateItem( $feed_item );
         }
-        ConsoleProgressBar::showProgress( 0, $count_items - 1 );
+        $console->showProgress( 0, $count_items - 1 );
     }
 
     private function setCurrentItem( FeedItem $item ): void
@@ -56,7 +60,7 @@ class FeedValidate
         $this->current_item = $item;
     }
 
-    private function getMpnCurrentProduct(): string
+    #[Pure] private function getMpnCurrentProduct(): string
     {
         if ( $this->current_item->getMpn() ) {
             return "mpn product: {$this->current_item->getMpn()}";
@@ -105,8 +109,12 @@ class FeedValidate
         $this->setCurrentItem( $item );
 
         $this->validateProductName( $item->getProduct(), $item->isGroup() );
-        $this->validateCostToUs( $item->getCostToUs(), $item->isGroup() );
-        $this->validateListPrice( $item->getListPrice(), $item->isGroup() );
+
+        if ( $this->feed_type === 'product' ) {
+            $this->validateCostToUs( $item->getCostToUs(), $item->isGroup() );
+            $this->validateListPrice( $item->getListPrice(), $item->isGroup() );
+        }
+
         $this->validateCategories( $item->getCategories() );
         $this->validateShortDesc( $item->getShortdescr() );
         $this->validateDescription( $item->getFulldescr() );
@@ -208,6 +216,10 @@ class FeedValidate
 
         if ( $data[ 'description' ] === 'Dummy' ) {
             $this->attachFailProduct( 'description', 'Product description is "Dummy"' );
+        }
+
+        if ( !StringHelper::isNotEmpty( strip_tags( $data[ 'description' ] ) ) ) {
+            $this->attachFailProduct( 'description', 'Product description is empty' );
         }
     }
 

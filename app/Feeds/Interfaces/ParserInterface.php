@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Feeds\Parser;
+namespace App\Feeds\Interfaces;
 
 use App\Feeds\Feed\FeedItem;
 use App\Feeds\Processor\AbstractProcessor;

@@ -2,27 +2,29 @@
 
 namespace App\Helpers;
 
+use Exception;
+
 class StringHelper
 {
     /**
-     * Removes line breaks and repeated whitespace characters
+     * Удаляет переносы строк и повторяющиеся пробельные символы
      * @param string $string
      * @return string
      */
     public static function removeSpaces( string $string ): string
     {
-        $string = str_replace( "\n", '', $string );
-        return trim( preg_replace( '/[ \s]+/u', ' ', $string ) );
+        $string = str_replace( [ "\n", '\n' ], ' ', $string );
+        return self::trim( preg_replace( '/[ \s]+/u', ' ', $string ) );
     }
 
     /**
-     * Removes tabulation, carriage transfer. Removes duplicate line breaks and whitespace characters
+     * Удаляет табуляцию, перенос каретки. Удаляет повторяющиеся переносы строк и пробельные символы
      * @param string $string
      * @return string
      */
     public static function normalizeSpaceInString( string $string ): string
     {
-        $string = trim( str_replace( ' ', ' ', $string ) );
+        $string = trim( str_replace( ' ', ' ', $string ) );
         $string = preg_replace( '/( )+/', " ", $string );
         $string = preg_replace( [ '/\t+(( )+)?/', '/\r+(( )+)?/' ], '', $string );
         $string = preg_replace( '/\n(( )+)?/', "\n", $string );
@@ -30,130 +32,139 @@ class StringHelper
     }
 
     /**
-     * Brings the json string to a valid form, by escaping double quotes in the text
+     * Приводит json строку к валидному виду, путем экранирования двойных кавычек в тексте
      * @param string $string
      * @return string
      */
     public static function normalizeJsonString( string $string ): string
     {
-        $string = stripslashes( self::removeSpaces( self::cutTagsAttributes( $string ) ) );
-        $string = str_replace( [ 'true', 'false', 'null' ], [ '"true"', '"false"', '"null"' ], $string );
-        $clear_string = '';
+        try {
+            json_decode( $string, true, 512, JSON_THROW_ON_ERROR );
 
-        $symbols_in_string = preg_split( "//u", $string, -1, PREG_SPLIT_NO_EMPTY );
-        foreach ( $symbols_in_string as $key => $symbol ) {
+            return $string;
+        } catch ( Exception ) {
+            $string = stripslashes( self::removeSpaces( self::cutTagsAttributes( $string ) ) );
+            $string = str_replace( [ 'true', 'false', 'null' ], [ '"true"', '"false"', '"null"' ], $string );
+            $clear_string = '';
 
-            /** Is the opening quote in the key or value in the json string **/
-            $is_left = true;
+            $symbols_in_string = preg_split( "//u", $string, -1, PREG_SPLIT_NO_EMPTY );
+            foreach ( $symbols_in_string as $key => $symbol ) {
 
-            /** Is the closing quotation mark in the key or value in the json string **/
-            $is_right = true;
+                /** Является ли кавычка открывающей в ключе или значении в json строке **/
+                $is_left = true;
 
-            if ( $symbol === '"' ) {
+                /** Является ли кавычка закрывающей в ключе или значении в json строке **/
+                $is_right = true;
 
-                /** Getting the first character to the left of the quotation mark **/
-                $symbol_before_quote = $symbols_in_string[ $key - 1 ];
+                if ( $symbol === '"' ) {
 
-                /** If the character is a number, the quotation mark can be a pointer to the unit of measurement (inch) **/
-                if ( is_numeric( $symbol_before_quote ) ) {
-                    $is_left = false;
-                }
+                    /** Получаем первый символ слева от кавычки **/
+                    $symbol_before_quote = $symbols_in_string[ $key - 1 ];
 
-                /** If the character is a space or a comma, we get the next character before it **/
-                if ( $symbol_before_quote === ' ' ) {
-                    $symbol_before_quote = $symbols_in_string[ $key - 2 ];
-                    if ( $symbol_before_quote === ',' ) {
-                        $symbol_before_quote = $symbols_in_string[ $key - 3 ];
-                        if ( $symbol_before_quote === ' ' ) {
-                            $symbol_before_quote = $symbols_in_string[ $key - 4 ];
-                        }
+                    /** Если символ является числом, кавычка может являться указателем на единицу измерения (дюйм) **/
+                    if ( is_numeric( $symbol_before_quote ) ) {
+                        $is_left = false;
                     }
-                }
-                elseif ( $symbol_before_quote === ',' ) {
-                    $symbol_before_quote = $symbols_in_string[ $key - 2 ];
+
+                    /** Если символ является пробелом или запятой, получаем следующий символ перед ним **/
                     if ( $symbol_before_quote === ' ' ) {
-                        $symbol_before_quote = $symbols_in_string[ $key - 3 ];
-                    }
-                }
-
-                if ( !is_numeric( $symbol_before_quote ) && !in_array( $symbol_before_quote, [ '[', '{', ':', '"', '}', ']' ] ) ) {
-                    $is_left = false;
-                }
-
-                /** Getting the first character to the right of the quotation mark **/
-                $symbol_after_quote = $symbols_in_string[ $key + 1 ];
-
-                /** If the character is a space or a comma, we get the next character after it **/
-                if ( $symbol_after_quote === ' ' ) {
-                    $symbol_after_quote = $symbols_in_string[ $key + 2 ];
-                    if ( $symbol_after_quote === ',' ) {
-                        $symbol_after_quote = $symbols_in_string[ $key + 3 ];
-                        if ( $symbol_after_quote === ' ' ) {
-                            $symbol_after_quote = $symbols_in_string[ $key + 4 ];
+                        $symbol_before_quote = $symbols_in_string[ $key - 2 ];
+                        if ( $symbol_before_quote === ',' ) {
+                            $symbol_before_quote = $symbols_in_string[ $key - 3 ];
+                            if ( $symbol_before_quote === ' ' ) {
+                                $symbol_before_quote = $symbols_in_string[ $key - 4 ];
+                            }
                         }
                     }
-                }
-                elseif ( $symbol_after_quote === ',' ) {
-                    $symbol_after_quote = $symbols_in_string[ $key + 2 ];
-                    if ( $symbol_after_quote === ' ' ) {
-                        $symbol_after_quote = $symbols_in_string[ $key + 3 ];
+                    elseif ( $symbol_before_quote === ',' ) {
+                        $symbol_before_quote = $symbols_in_string[ $key - 2 ];
+                        if ( $symbol_before_quote === ' ' ) {
+                            $symbol_before_quote = $symbols_in_string[ $key - 3 ];
+                        }
                     }
-                }
 
-                /** If the character is a quotation mark, and the current quotation mark is the opening one, we are looking for the next quotation mark in the string **/
-                if ( $symbol_after_quote === '"' && $is_right ) {
-                    foreach ( $symbols_in_string as $sub_key => $sub_symbol ) {
+                    if ( !is_numeric( $symbol_before_quote ) && !in_array( $symbol_before_quote, [ '[', '{', ':', '"', '}', ']' ] ) ) {
+                        $is_left = false;
+                    }
 
-                        /** If the character is a quotation mark and its index in the string is greater than the index of the last found quotation mark, we start processing it **/
-                        if ( $sub_key > $key + 4 && $sub_symbol === '"' ) {
+                    /** Получаем первый символ справа от кавычки **/
+                    $symbol_after_quote = $symbols_in_string[ $key + 1 ];
 
-                            /** Getting the first character to the right of the quotation mark **/
-                            $symbol_after_quote = $symbols_in_string[ $sub_key + 1 ];
+                    /** Если символ является кавычкой, значит текущая кавычка может являться указателем на единицу измерения (дюйм) **/
+                    if ( $symbol_after_quote === '"' ) {
+                        $is_right = false;
+                    }
 
-                            /** If the character is a space or a comma, we get the next character after it **/
+                    /** Если символ является пробелом или запятой, получаем следующий символ после него **/
+                    if ( $symbol_after_quote === ' ' ) {
+                        $symbol_after_quote = $symbols_in_string[ $key + 2 ];
+                        if ( $symbol_after_quote === ',' ) {
+                            $symbol_after_quote = $symbols_in_string[ $key + 3 ];
                             if ( $symbol_after_quote === ' ' ) {
-                                $symbol_after_quote = $symbols_in_string[ $sub_key + 2 ];
-                                if ( $symbol_after_quote === ',' ) {
-                                    $symbol_after_quote = $symbols_in_string[ $sub_key + 3 ];
-                                    if ( $symbol_after_quote === ' ' ) {
-                                        $symbol_after_quote = $symbols_in_string[ $sub_key + 4 ];
+                                $symbol_after_quote = $symbols_in_string[ $key + 4 ];
+                            }
+                        }
+                    }
+                    elseif ( $symbol_after_quote === ',' ) {
+                        $symbol_after_quote = $symbols_in_string[ $key + 2 ];
+                        if ( $symbol_after_quote === ' ' ) {
+                            $symbol_after_quote = $symbols_in_string[ $key + 3 ];
+                        }
+                    }
+
+                    /** Если символ является кавычкой, и текущая кавычка является открывающей ищем следующую кавычку в строке **/
+                    if ( $symbol_after_quote === '"' && $is_right ) {
+                        foreach ( $symbols_in_string as $sub_key => $sub_symbol ) {
+
+                            /** Если символ является кавычкой и его индекс в строке больше индекса последней найденной кавычки, начинаем его обработку **/
+                            if ( $sub_key > $key + 4 && $sub_symbol === '"' ) {
+
+                                /** Получаем первый символ справа от кавычки **/
+                                $symbol_after_quote = $symbols_in_string[ $sub_key + 1 ];
+
+                                /** Если символ является пробелом или запятой, получаем следующий символ после него **/
+                                if ( $symbol_after_quote === ' ' ) {
+                                    $symbol_after_quote = $symbols_in_string[ $sub_key + 2 ];
+                                    if ( $symbol_after_quote === ',' ) {
+                                        $symbol_after_quote = $symbols_in_string[ $sub_key + 3 ];
+                                        if ( $symbol_after_quote === ' ' ) {
+                                            $symbol_after_quote = $symbols_in_string[ $sub_key + 4 ];
+                                        }
                                     }
                                 }
-                            }
-                            elseif ( $symbol_after_quote === ',' ) {
-                                $symbol_after_quote = $symbols_in_string[ $sub_key + 2 ];
-                                if ( $symbol_after_quote === ' ' ) {
-                                    $symbol_after_quote = $symbols_in_string[ $sub_key + 3 ];
+                                elseif ( $symbol_after_quote === ',' ) {
+                                    $symbol_after_quote = $symbols_in_string[ $sub_key + 2 ];
+                                    if ( $symbol_after_quote === ' ' ) {
+                                        $symbol_after_quote = $symbols_in_string[ $sub_key + 3 ];
+                                    }
                                 }
-                            }
 
-                            /** After the first condition is met, we exit the loop so as not to iterate through all the characters to the end of the line **/
-                            break;
+                                /** После первого выполнения условия выходим из цикла, чтобы не перебирать все символы до конца строки **/
+                                break;
+                            }
                         }
                     }
-                }
 
-                if ( !in_array( $symbol_after_quote, [ ':', '"', '}', ']' ] ) ) {
-                    $is_right = false;
-                }
+                    if ( !in_array( $symbol_after_quote, [ ':', '"', '}', ']' ] ) ) {
+                        $is_right = false;
+                    }
 
-                /** If the quotation mark is neither opening nor closing, we escape it **/
-                if ( !$is_left && !$is_right ) {
-                    $symbols_in_string[ $key ] = "\\$symbol";
+                    /** Если кавычка не является ни открывающей, ни закрывающей, экранируем ее **/
+                    if ( !$is_left && !$is_right ) {
+                        $symbols_in_string[ $key ] = "\\$symbol";
+                    }
                 }
+                $clear_string .= $symbols_in_string[ $key ];
             }
-
-            $clear_string .= $symbols_in_string[ $key ];
+            return str_replace( [ '"true"', '"false"', '"null"' ], [ 'true', 'false', 'null' ], $clear_string );
         }
-
-        return str_replace( [ '"true"', '"false"', '"null"' ], [ 'true', 'false', 'null' ], $clear_string );
     }
 
     /**
-     * Splits the text into paragraphs according to the specified number of sentences, if the source text does not contain html tags
-     * @param string $string Text without html tags
-     * @param int $size Number of sentences in one paragraph
-     * @return string Formatted text
+     * Разбивает текст на абзацы по указанному количеству предложений, если исходный текст не содержит html тегов
+     * @param string $string Текст без html тегов
+     * @param int $size Количество предложений в одном абзаце
+     * @return string Отформатированный текст
      */
     public static function paragraphing( string $string, int $size = 3 ): string
     {
@@ -170,7 +181,7 @@ class StringHelper
     }
 
     /**
-     * Checks whether the string is not empty
+     * Проверяет, является ли строка не пустой
      * @param string|null $string
      * @return bool
      */
@@ -179,11 +190,11 @@ class StringHelper
         if ( empty( $string ) ) {
             return false;
         }
-        return !empty( preg_replace( '/\s+/', '', self::removeSpaces( $string ) ) );
+        return !empty( preg_replace( '/\s+/', '', self::removeSpaces( strip_tags( $string ) ) ) );
     }
 
     /**
-     * Cuts out block tags and hyperlink tags with their contents, clearing the remaining tags from all attributes.
+     * Вырезает блочные теги и теги гиперссылки с их содержимым, очищая оставшиеся теги от всех атрибутов.
      * @param string $string
      * @param bool $flag
      * @param array $tags
@@ -195,6 +206,8 @@ class StringHelper
             'span',
             'p',
             'br',
+            'b',
+            'strong',
             'ol',
             'ul',
             'li',
@@ -216,11 +229,11 @@ class StringHelper
         ];
         foreach ( $regexps as $regexp ) {
             if ( preg_match( $regexp, $string ) ) {
-                $string = (string) preg_replace( $regexp, '', $string );
+                $string = (string)preg_replace( $regexp, '', $string );
             }
         }
 
-        $string = (string) self::mb_trim( $string );
+        $string = self::trim( $string );
         if ( !$flag ) {
             $mass = [];
         }
@@ -242,30 +255,31 @@ class StringHelper
             $tags_string .= "<$tag>";
         }
 
+        $string = preg_replace( '~(<)(</?\w+?>)~', '$1 $2', $string );
         $string = strip_tags( $string, $tags_string );
         foreach ( $mass as $tag ) {
 
-            $regexp = "/(<$tag)([^>]*)(>)/i";
+            $regexp = "/(<$tag)([^r>]*)(>)/i";
 
             if ( preg_match( $regexp, $string ) ) {
-                $string = (string) preg_replace( $regexp, '$1$3', $string );
+                $string = (string)preg_replace( $regexp, '$1$3', $string );
             }
         }
         return $string;
     }
 
     /**
-     * Cuts out all tag attributes
+     * Вырезает все атрибуты тегов
      * @param string $string
      * @return string
      */
     public static function cutTagsAttributes( string $string ): string
     {
-        return preg_replace( '/(<[a-z]+)([^>]*)(>)/i', '$1$3', $string );
+        return preg_replace( '/(<[a-z0-9]+)([^>]*)(>)/i', '$1$3', $string );
     }
 
     /**
-     * Cuts out empty tags
+     * Вырезает пустые теги
      * @param string $string
      * @return string
      */
@@ -273,7 +287,7 @@ class StringHelper
     {
         $clean_regex = [
             '/<[u|o]l>((\s+)?<li>(\s+)?)+<\/[u|o]l>/is',
-            '/<[^<br>|^\/](\w+){0,10}>(\s+)?((<br>(\s+)?)+)?(\s+)?<\/\w+>/i'
+            '/<(\w+){0,1}[^br]>(\s+)?((<br>(\s+)?)+)?(\s+)?<\/\w+>/i'
         ];
         $string = preg_replace( $clean_regex, '', self::normalizeSpaceInString( $string ) );
         foreach ( $clean_regex as $regex ) {
@@ -293,44 +307,39 @@ class StringHelper
         return mb_strtoupper( $firstChar, $encoding ) . $then;
     }
 
-    public static function mb_ucwords( $string, $encoding = 'UTF-8' ): string
+    public static function ucWords( $string ): string
     {
-        $upper_words = array();
-        $words = explode( ' ', $string );
-
-        foreach ( $words as $word ) {
-            $upper_words[] = self::mb_ucfirst( $word, $encoding );
-        }
-
-        return implode( ' ', $upper_words );
-
+        return preg_replace_callback( '/([a-z])([a-z0-9\'"]+|\W+)/iu', static function ( $match ) {
+            return strtoupper( $match[ 1 ] ) . $match[ 2 ];
+        }, $string );
     }
 
     /**
-     * @param $string
+     * @param string $string
      * @param string|string[] $trim_chars
-     * @return string|string[]|null
+     * @return string
      */
-    public static function mb_trim( $string, array | string $trim_chars = "\s" )
+    public static function trim( string $string, array|string $trim_chars = '' ): string
     {
-        return preg_replace( '/^[' . $trim_chars . ']*(?U)(.*)[' . $trim_chars . ']*$/u', '\\1', $string );
+        return (string)preg_replace( '/^[\s' . $trim_chars . ']*(?U)(.*)[\s' . $trim_chars . ']*$/u', '\\1', $string );
     }
 
-    private static function UPC_calculate_check_digit( $upc_code )
+
+    private static function UPC_calculate_check_digit( $upc_code ): int
     {
         $sum = 0;
         $mult = 3;
-        for ( $i = ( \strlen( $upc_code ) - 2 ); $i >= 0; $i-- ) {
+        for ( $i = ( strlen( $upc_code ) - 2 ); $i >= 0; $i-- ) {
             $sum += $mult * $upc_code[ $i ];
-            if ( $mult == 3 ) {
+            if ( $mult === 3 ) {
                 $mult = 1;
             }
             else {
                 $mult = 3;
             }
         }
-        if ( $sum % 10 == 0 ) {
-            $sum = ( $sum % 10 );
+        if ( $sum % 10 === 0 ) {
+            $sum %= 10;
         }
         else {
             $sum = 10 - ( $sum % 10 );
@@ -338,44 +347,41 @@ class StringHelper
         return $sum;
     }
 
-    private static function isISBN( $sCode )
+    private static function isISBN( $sCode ): bool
     {
         $bResult = false;
-        if ( \in_array( strlen( $sCode ), [ 10, 13 ], true ) && \in_array( substr( $sCode, 0, 3 ), [ 978, 979 ], true ) ) {
+        if ( in_array( strlen( $sCode ), [ 10, 13 ], true ) && in_array( substr( $sCode, 0, 3 ), [ 978, 979 ], true ) ) {
             $bResult = true;
         }
         return $bResult;
     }
 
-    public static function calculateUPC( $upc_code )
+    public static function calculateUPC( $upc_code ): array|string|null
     {
-        $upc_code = preg_replace( '/[^0-9]/', '', $upc_code );
+        $upc_code = preg_replace( '/[\D]/', '', $upc_code );
         switch ( strlen( $upc_code ) ) {
-            case 8:
             case 14:
                 $cd = self::UPC_calculate_check_digit( $upc_code );
-                if ( $cd != $upc_code[ strlen( $upc_code ) - 1 ] ) {
+                if ( $cd !== (int)$upc_code[ strlen( $upc_code ) - 1 ] ) {
                     return substr( $upc_code, 0, -1 ) . $cd;
                 }
-
                 return $upc_code;
             case 11:
             case 12:
             case 13:
                 $cd = self::UPC_calculate_check_digit( $upc_code );
-                if ( $cd != $upc_code[ strlen( $upc_code ) - 1 ] ) {
+                if ( $cd !== (int)$upc_code[ strlen( $upc_code ) - 1 ] ) {
                     if ( !self::isISBN( $upc_code ) || ( self::isISBN( $upc_code ) && strlen( $upc_code ) === 12 ) ) {
                         $cd = self::UPC_calculate_check_digit( $upc_code . '1' );
                         return $upc_code . $cd;
                     }
-
                     return '';
                 }
-
                 return $upc_code;
         }
         return '';
     }
+
 
     /**
      * parser size inch or foot from string to inch float
@@ -404,7 +410,6 @@ class StringHelper
         $size = trim( $size, '"\'' );
         $parts = explode( ' ', $size );
         $int = 0;
-        $float = 0;
 
         if ( is_numeric( $parts[ 0 ] ) ) {
             $int = $parts[ 0 ];
@@ -417,18 +422,18 @@ class StringHelper
         if ( !is_numeric( $float ) && str_contains( $float, '/' ) ) {
             $parts = explode( '/', $float );
             if ( is_numeric( $parts[ 0 ] ) && is_numeric( $parts[ 1 ] ) ) {
-                $float = (float) $parts[ 0 ] / (float) $parts[ 1 ];
+                $float = (float)$parts[ 0 ] / (float)$parts[ 1 ];
             }
         }
 
-        return ( (float) $int + (float) $float ) * $mul;
+        return ( (float)$int + (float)$float ) * $mul;
     }
 
     public static function getMoney( string $price ): float
     {
         $price = str_replace( ',', '', $price );
         preg_match( '/(\d+)?(\.?\d+(\.?\d+)?)/', $price, $matches );
-        return (float) ( $matches[ 0 ] ?? 0.0 );
+        return (float)( $matches[ 0 ] ?? 0.0 );
     }
 
     public static function existsMoney( string $string ): string
@@ -460,8 +465,8 @@ class StringHelper
                 $match_float[ 'fractional' ] = $divisible / $divisor;
             }
             return self::normalizeFloat( isset( $match_float[ 'integer' ] )
-                ? (float) $match_float[ 'integer' ] + (float) $match_float[ 'fractional' ]
-                : (float) $match_float[ 'fractional' ], $default );
+                ? (float)$match_float[ 'integer' ] + (float)$match_float[ 'fractional' ]
+                : (float)$match_float[ 'fractional' ], $default );
         }
         return $default;
     }
@@ -469,25 +474,46 @@ class StringHelper
     public static function normalizeFloat( ?float $float, ?float $default = null ): ?float
     {
         $float = round( $float, 2 );
-        return $float > 0.01 ? $float : $default;
+        return $float > 0.00 ? $float : $default;
     }
 
-    public static function normalizeSrcLink( $link, $domain ): string
+
+    public static function normalizeSrcLink( $link, $url, $always_root = false ): string
     {
-        $cleared_link = ltrim( str_replace( [ '../', './', '\\' ], '', $link ), '/' );
-        $parsed_domain = parse_url( $domain );
+        if ( empty( trim( $link ) ) ) {
+            return '';
+        }
+        $first_slash = str_starts_with( $link, '/' );
+        $link = ltrim( str_replace( [ '../', './', '\\' ], '', trim( $link ) ), '/' );
+        $parsed_domain = parse_url( $url );
+        $path = '';
+
+        if ( !$first_slash && !$always_root ) {
+            $path = $parsed_domain[ 'path' ] ?? '';
+            if ( $path ) {
+                $path = trim( $path, '/' );
+
+                if ( !str_contains( $path, '/' ) && str_contains( $path, '.' ) ) {
+                    $path = '';
+                }
+                elseif ( str_contains( $path, '/' ) ) {
+                    $path = str_contains( $path, '.' ) ? substr( $path, 0, ( strrpos( $path, '/' ) ) ) : $path;
+                }
+                $path = str_ends_with( $path, '/' ) || empty( $path ) ? $path : "$path/";
+            }
+        }
+        $cleared_link = str_contains( $link, '/' ) ? $link : "/$link";
 
         preg_match( '~^(?:(?<protocol>(?:ht|f)tps?)://)?(?<domain_name>[\pL\d.-]+\.(?<zone>\pL{2,4}))~iu', $cleared_link, $matches );
 
         if ( empty( $matches[ 'domain_name' ] ) ) {
-            return $parsed_domain[ 'scheme' ] . '://' . $parsed_domain[ 'host' ] . '/' . $cleared_link;
+            $cleared_link = $parsed_domain[ 'scheme' ] . '://' . $parsed_domain[ 'host' ] . '/' . $path . trim( $cleared_link, '/' );
+        }
+        elseif ( empty( $matches[ 'protocol' ] ) ) {
+            $cleared_link = $parsed_domain[ 'scheme' ] . '://' . trim( $cleared_link, '/' );
         }
 
-        if ( empty( $matches[ 'protocol' ] ) ) {
-            return $parsed_domain[ 'scheme' ] . '://' . $cleared_link;
-        }
-
-        return $cleared_link;
+        return str_replace( ' ', '%20', $cleared_link );
     }
 
 
