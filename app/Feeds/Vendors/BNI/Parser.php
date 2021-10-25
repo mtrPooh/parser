@@ -51,6 +51,21 @@ class Parser extends HtmlParser
                     $this->dims[ 'z' ] = StringHelper::getFloat( $matches[ 1 ][ 2 ] / 2.54 );
                 }
 
+                if ( empty( $this->dims[ 'x' ] ) ) {
+
+                    preg_match_all( '%(\d+.)%ui', $value, $matches );
+
+                    if ( !empty( $matches[ 1 ][ 0 ] ) ) {
+                        $this->dims[ 'x' ] = StringHelper::getFloat( $matches[ 1 ][ 0 ] );
+                    }
+                    if ( !empty( $matches[ 1 ][ 1 ] ) ) {
+                        $this->dims[ 'y' ] = StringHelper::getFloat( $matches[ 1 ][ 1 ] );
+                    }
+                    if ( !empty( $matches[ 1 ][ 2 ] ) ) {
+                        $this->dims[ 'z' ] = StringHelper::getFloat( $matches[ 1 ][ 2 ] );
+                    }
+                }
+
                 unset( $this->attrs[ $key ] );
             }
         }
@@ -129,12 +144,17 @@ class Parser extends HtmlParser
 
     public function getAvail(): ?int
     {
-        return StringHelper::getFloat( $this->getText( 'div.box-qty li' ) ) ?? 0;
+        return StringHelper::getFloat( $this->getText( 'div.box-qty li' ), 0 );
     }
 
     public function getBrand(): ?string
     {
-        return $this->getAttr( 'div.product-brand img', 'title' ) ?: null;
+        $brand = $this->getAttr( 'div.product-brand img', 'title' );
+        if ( !empty( $brand ) ) {
+            return $brand;
+        }
+
+        return null;
     }
 
     public function getDescription(): string
@@ -145,6 +165,11 @@ class Parser extends HtmlParser
     public function getShortDescription(): array
     {
         return array_slice( $this->shorts, 0, 10 );
+    }
+
+    public function getAttributes(): ?array
+    {
+        return $this->attrs ?: null;
     }
 
     public function getDimZ(): ?float
