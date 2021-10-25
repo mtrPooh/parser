@@ -47,7 +47,7 @@ class Parser extends HtmlParser
 
     public function getCostToUs(): float
     {
-        return StringHelper::getFloat( $this->getAttr( 'div#js-price-value', 'data-base-price' ) ) ?? 0;
+        return StringHelper::getFloat( $this->getAttr( 'div#js-price-value', 'data-base-price' ), 0 );
     }
 
     public function getImages(): array
@@ -81,7 +81,7 @@ class Parser extends HtmlParser
 
     public function getAvail(): ?int
     {
-        return StringHelper::getFloat( $this->getText( 'div#js-inventory-message font' ) ) ?? 0;
+        return StringHelper::getFloat( $this->getText( 'div#js-inventory-message font' ), 0 );
     }
 
     public function getBrand(): ?string
@@ -102,7 +102,9 @@ class Parser extends HtmlParser
         if ( str_contains( $description, '<br>' ) ) {
             $rows = explode( '<br>', $description );
             foreach ( $rows as $row ) {
-                if ( str_contains( $row, '$' ) || str_contains( $row, 'Item number' ) ) {
+                if ( str_contains( $row, '$' ) || str_contains( $row, 'Item number' ) || str_contains( $row, 'contact us'
+                    ) ) {
+
                     $description = str_replace( $row, '', $description );
                 }
             }
