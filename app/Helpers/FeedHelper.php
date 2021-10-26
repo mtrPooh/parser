@@ -13,6 +13,7 @@ class FeedHelper
      * Очищает описание товара от лишних переносов строки, пробелов, лишних и пустых тегов, мусора в предложениях и параграфах
      * @param string $description Описание товара
      * @return string Очищенное описание
+     * @deprecated
      */
     public static function cleanProductDescription( string $description ): string
     {
@@ -36,6 +37,7 @@ class FeedHelper
      * Очищает массив особенностей товара от пустых элементов
      * @param array $short_description Особенности товара
      * @return array Очищенные особенности
+     * @deprecated
      */
     public static function cleanShortDescription( array $short_description ): array
     {
@@ -47,6 +49,7 @@ class FeedHelper
      * Очищает массив характеристик товара от пустых элементов
      * @param array|null $attributes Характеристики товара
      * @return array|null Очищенные характеристики
+     * @deprecated
      */
     public static function cleanAttributes( ?array $attributes ): ?array
     {
@@ -68,6 +71,7 @@ class FeedHelper
      * @param string $string
      * @param array $user_regex
      * @return string
+     * @deprecated
      */
     public static function cleanProductData( string $string, array $user_regex = [] ): string
     {
@@ -100,6 +104,7 @@ class FeedHelper
      * @param array $user_regex Массив пользовательских регулярных выражений
      * @param bool $replace Очищать всю строку, если в ней было найдено совпадение или удалять только найденную подстроку
      * @return string
+     * @deprecated
      */
     public static function cleaning( string $string, array $user_regex = [], bool $replace = false ): string
     {
@@ -135,6 +140,7 @@ class FeedHelper
      * @param array $short_description Массив особенностей товара
      * @param array $attributes Массив характеристик товара
      * @return array Возвращает массив, содержащий
+     * @deprecated
      *  [
      *      'short_description' => array - массив особенностей товара
      *      'attributes' => array|null - массив характеристик товара
@@ -148,7 +154,7 @@ class FeedHelper
             $text = $c->text();
             if ( str_contains( $text, ':' ) ) {
                 [ $key, $value ] = explode( ':', $text, 2 );
-                $attributes[ trim( $key ) ] = trim( StringHelper::normalizeSpaceInString( $value ) );
+                $attributes[ trim( $key ) ] = trim( StringHelper::removeSpaces( $value ) );
             }
             else {
                 $short_description[] = $text;
@@ -168,6 +174,7 @@ class FeedHelper
      * @param array $short_description Массив особенностей товара
      * @param array $attributes Массив характеристик товара
      * @return array Возвращает массив, содержащий
+     * @deprecated
      *  [
      *      'description' => string - описание товара очищенное от особенностей и характеристик
      *      'short_description' => array - массив особенностей товара
@@ -177,16 +184,16 @@ class FeedHelper
     #[ArrayShape( [ 'description' => "string", 'short_description' => "array", 'attributes' => "array|null" ] )]
     public static function getShortsAndAttributesInDescription( string $description, array $user_regexes = [], array $short_description = [], array $attributes = [] ): array
     {
+        $description = StringHelper::removeSpaces( $description );
         $description = StringHelper::cutTagsAttributes( $description );
         $description = StringHelper::cutEmptyTags( $description );
-        $description = StringHelper::normalizeSpaceInString( $description );
 
         $product_data = [
             'short_description' => $short_description,
             'attributes' => $attributes
         ];
 
-        $regex_pattern = '<(div|p|span|b|strong|h[\d]?|em)>(\s+)?%s(\s+)?((<\/\w+>)+)?:?(\s+)?<\/(div|p|span|b|strong|h[\d]?|em)>(\s+)?((<\w+>)+)?((<\/\w+>)+)?((<\w+>)+)?(\s+)?';
+        $regex_pattern = '<(div|p|span|b|strong|h[\d]?|em)>(<\w+>)?(\s+)?%s(\s+)?((<\/\w+>)+)?:?(\s+)?(<\/(div|p|span|b|strong|h[\d]?|em)>)?(\s+)?((<\w+>(\s+)?)+)?((<\/\w+>(\s+)?)+)?((<\w+>(\s+)?)+)?(\s+)?';
 
         $keys = [
             '(Product[s]?)?(\s+)?Dimension[s]?',
@@ -199,7 +206,6 @@ class FeedHelper
 
         $regexes_list = [
             '(<[u|o]l>)?(\s+)?(?<content_list><li>.*?<\/li>)(\s+)?<\/[u|o]l>',
-            '(?<content_list><li>.*<\/li>)(\s+)?'
         ];
 
         $regexes = [];
@@ -277,6 +283,7 @@ class FeedHelper
             'attributes' => $product_data[ 'attributes' ] ?: null
         ];
     }
+
 
     /**
      * Получает размеры товара из строки

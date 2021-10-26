@@ -4,7 +4,6 @@ namespace App\Feeds\Feed;
 
 use App\Feeds\Interfaces\ParserInterface;
 use App\Feeds\Parser\HtmlParser;
-use App\Helpers\FeedHelper;
 use App\Helpers\StringHelper;
 use DateTime;
 use DateTimeZone;
@@ -13,6 +12,7 @@ use Throwable;
 
 class FeedItem
 {
+    private ?ParserInterface $parser = null;
     /**
      * @var string Уникальный код товара
      */
@@ -159,6 +159,8 @@ class FeedItem
     public function __construct( ParserInterface $parser = null )
     {
         if ( $parser ) {
+            $this->parser = $parser;
+
             $parser->beforeParse();
             try {
                 $this->setItemInfo( $parser );
@@ -174,7 +176,7 @@ class FeedItem
                                 }
 
                                 similar_text( $child->getGroupMask(), $child->getProduct(), $percent );
-                                if ( $percent > 50 ) {
+                                if ( $percent > 70 ) {
                                     $child->setGroupMask( '' );
                                 }
 
@@ -250,6 +252,11 @@ class FeedItem
         }
     }
 
+    public function setParser( ParserInterface $parser ): void
+    {
+        $this->parser = $parser;
+    }
+
     public function setItemInfo( ParserInterface $parser = null, FeedItem $item = null ): void
     {
         if ( $parser || $item ) {
@@ -262,7 +269,7 @@ class FeedItem
             }
             else {
                 similar_text( $item->getGroupMask(), $item->getProduct(), $percent );
-                if ( $percent > 50 ) {
+                if ( $percent > 70 ) {
                     $this->setProduct( $item->getProduct() );
                 }
                 else {
@@ -305,7 +312,7 @@ class FeedItem
      */
     public function setProductCode( string $productcode ): void
     {
-        $this->productcode = (string)mb_strtoupper( str_replace( ' ', '-', StringHelper::removeSpaces( StringHelper::trim( $productcode ) ) ) );
+        $this->productcode = (string)mb_strtoupper( str_replace( ' ', '-', StringHelper::removeSpaces( $productcode ) ) );
     }
 
     /**
@@ -337,11 +344,11 @@ class FeedItem
      */
     public function setProduct( string $product ): void
     {
-        if ( $this->getMpn() && str_contains( strtolower( $product ), strtolower( $this->getMpn() ) ) ) {
-            $product = preg_replace( "~(\s+)?(-|,|)?(\s+)?{$this->getMpn()}(\s+)?(-|,|)?(\s+)?~i", ' ', $product );
+        $product = StringHelper::ucWords( mb_strtolower( html_entity_decode( $product ) ) );
+        if ( $this->parser && method_exists( $this->parser, 'cleanProduct' ) ) {
+            $product = $this->parser->cleanProduct( $product );
         }
-        $product = StringHelper::ucWords( mb_strtolower( StringHelper::trim( FeedHelper::cleaning( html_entity_decode( $product ), [], true ), '\s\.' ) ) );
-        $this->product = $product;
+        $this->product = StringHelper::trim( $product, '\.' );
     }
 
     /**
@@ -388,13 +395,16 @@ class FeedItem
     }
 
     /**
-     * @param array $descr Устанавливает ключевые особенности товара
+     * @param array $short_description Устанавливает ключевые особенности товара
      */
-    public function setShortdescr( array $descr = [] ): void
+    public function setShortdescr( array $short_description = [] ): void
     {
-        $descr = FeedHelper::cleanShortDescription( $descr );
-        if ( $descr ) {
-            $this->descr = '<ul><li>' . html_entity_decode( implode( '</li><li>', $descr ) ) . '</li></ul>';
+        if ( $this->parser && method_exists( $this->parser, 'cleanShortDescription' ) ) {
+            $short_description = $this->parser->cleanShortDescription( $short_description );
+        }
+
+        if ( $short_description ) {
+            $this->descr = '<ul><li>' . html_entity_decode( implode( '</li><li>', $short_description ) ) . '</li></ul>';
         }
     }
 
@@ -411,10 +421,11 @@ class FeedItem
      */
     public function setFulldescr( string $fulldescr ): void
     {
-        if ( StringHelper::isNotEmpty( $fulldescr ) ) {
-            $fulldescr = FeedHelper::cleanProductDescription( $fulldescr ) ?: $this->getProduct();
+        if ( $this->parser && method_exists( $this->parser, 'cleanDescription' ) && StringHelper::isNotEmpty( $fulldescr ) ) {
+            $fulldescr = $this->parser->cleanDescription( $fulldescr );
+            $fulldescr = StringHelper::isNotEmpty( $fulldescr ) ? $fulldescr : $this->getProduct();
         }
-        $this->fulldescr = $fulldescr;
+        $this->fulldescr = StringHelper::removeSpaces( $fulldescr );
     }
 
     /**
@@ -534,7 +545,7 @@ class FeedItem
      */
     public function setImages( array $images ): void
     {
-        $this->images = array_values( array_filter( array_unique( $images ) ) );
+        $this->images = array_values( array_filter( array_unique( $images ), static fn( string $image ) => StringHelper::isNotEmpty( $image ) ) );
     }
 
     /**
@@ -839,10 +850,14 @@ class FeedItem
     public function setAttributes( ?array $get_attributes ): void
     {
         $get_attributes = $get_attributes ? array_map( static fn( string $attribute ) => html_entity_decode( $attribute ), $get_attributes ) : $get_attributes;
+        if ( $this->parser && method_exists( $this->parser, 'cleanAttributes' ) ) {
+            $get_attributes = $this->parser->cleanAttributes( $get_attributes ?? [] );
+        }
+
         if ( $get_attributes ) {
             $attributes = [];
             foreach ( $get_attributes as $key => $value ) {
-                $attributes[ StringHelper::mb_ucfirst( strtolower( str_replace( '_', ' ', $key ) ) ) ] = $value;
+                $attributes[ StringHelper::mb_ucfirst( mb_strtolower( str_replace( '_', ' ', $key ) ) ) ] = $value;
             }
             $get_attributes = $attributes;
         }
@@ -850,7 +865,7 @@ class FeedItem
         if ( $get_attributes && !array_key_exists( 'Color', $get_attributes ) ) {
             $product_name = $this->getProduct();
             foreach ( $this->getTableColors() as $color ) {
-                if ( str_contains( strtolower( $product_name ), strtolower( $color ) ) ) {
+                if ( str_contains( mb_strtolower( $product_name ), mb_strtolower( $color ) ) ) {
                     $get_attributes[ 'Color' ] = $color;
                 }
             }

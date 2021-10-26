@@ -10,6 +10,8 @@ use JetBrains\PhpStorm\Pure;
 
 trait ParserTrait
 {
+    use HandleDataTrait;
+
     protected AbstractProcessor $vendor;
     protected ?array $data = null;
 

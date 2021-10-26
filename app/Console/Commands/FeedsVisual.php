@@ -80,6 +80,12 @@ class FeedsVisual extends Command
             $dx_code_url = $dx_code;
         }
 
+        $products_log = [];
+        $feed_error_file = "logs/{$dx_code_url}_error.json";
+        if ( Storage::exists( $feed_error_file ) ) {
+            $errors = json_decode( Storage::get( $feed_error_file ), true, 512, JSON_THROW_ON_ERROR );
+        }
+
         /**
          * Если json файл с товарами дистрибьютора существует,
          * разбиваем список товаров на части по 60 товаров (такое количество будет выводиться на странице)
@@ -87,6 +93,69 @@ class FeedsVisual extends Command
          */
         if ( Storage::disk( 'local' )->exists( $feed_file ) ) {
             $products = json_decode( Storage::disk( 'local' )->get( $feed_file ), true, 512, JSON_THROW_ON_ERROR )[ 'products' ];
+
+            /**
+             * Если существует файл с ошибками валидации, сохраняем отдельный кэш для товаров с ошибками,
+             * чтобы иметь возможность просматривать их отдельно от валидных товаров
+             */
+            if ( isset( $errors ) ) {
+                foreach ( $products as $product ) {
+                    $find_error = false;
+
+                    foreach ( $errors as $general_error => $errors_types ) {
+                        foreach ( $errors_types as $error_type => $code_products ) {
+                            foreach ( $code_products as $code_product ) {
+                                if ( $product[ 'productcode' ] === $code_product || $product[ 'hash_product' ] === $code_product ) {
+                                    $products_log[ strtolower( $general_error ) ][ strtolower( $error_type ) ][] = $product;
+
+                                    $find_error = true;
+                                }
+                            }
+                        }
+                    }
+
+                    if ( !$find_error ) {
+                        $products_log[ 'valid' ][ 'valid' ][] = $product;
+                    }
+                }
+
+                $filters = [];
+                foreach ( $products_log as $general_type => $types_products ) {
+                    $type = array_key_first( $types_products );
+                    $types_products = array_shift( $types_products );
+                    $page_products = array_chunk( $types_products, 60 );
+                    $total_pages = count( $page_products );
+                    foreach ( $page_products as $page => $page_product ) {
+                        ++$page;
+
+                        /**
+                         * [
+                         *      products => array массив товаров, которые будут отображены на странице
+                         *      total_products => int общее количество товаров
+                         *      total_pages => int количество страниц для построения пагинации
+                         * ]
+                         */
+                        $cache_products = json_encode( [ 'products' => $page_product, 'total_products' => count( $types_products ), 'total_pages' => $total_pages ], JSON_THROW_ON_ERROR );
+                        Cache::put( "{$dx_code}__{$storefront}_{$general_type}_" . trim( preg_replace( '/[^a-z0-9]/', '_', $type ), '_' ) . "_$page", $cache_products, 86400 );
+                    }
+
+                    /** Формируем массив фильтров для навигации по типам ошибок валидации товаров **/
+                    if ( $general_type === 'valid' ) {
+                        $filters[ $general_type ] = [
+                            'page_link' => $general_type,
+                            'total_products' => count( $types_products )
+                        ];
+                    }
+                    else {
+                        $filters[ $general_type ][ $type ] = [
+                            'page_link' => "errors/$general_type/" . trim( preg_replace( '/[^a-z0-9]/', '_', $type ), '_' ),
+                            'total_products' => count( $types_products )
+                        ];
+                    }
+                }
+
+                Cache::put( "{$dx_code}__{$storefront}_filters", $filters, 86400 );
+            }
 
             $page_products = array_chunk( $products, 60 );
             $total_pages = count( $page_products );
@@ -101,14 +170,14 @@ class FeedsVisual extends Command
                  * ]
                  */
                 $cache_products = json_encode( [ 'products' => $page_product, 'total_products' => count( $products ), 'total_pages' => $total_pages ], JSON_THROW_ON_ERROR );
-                Cache::put( "{$dx_code}__{$storefront}_$page", $cache_products, 86400 );
+                Cache::put( "{$dx_code}__{$storefront}_all_$page", $cache_products, 86400 );
             }
 
             if ( $port = $this->option( 'port' ) ) {
-                $this->info( "Visual created. See http://127.0.0.1:$port/feeds/visual/$dx_code_url" );
+                $this->info( "Visual created. See http://127.0.0.1:$port/feeds/visual/$dx_code_url/products" );
             }
             else {
-                $this->info( "Visual created. See http://127.0.0.1/feeds/visual/$dx_code_url" );
+                $this->info( "Visual created. See http://127.0.0.1/feeds/visual/$dx_code_url/products" );
             }
         }
         else {

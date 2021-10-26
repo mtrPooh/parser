@@ -13,22 +13,8 @@ class StringHelper
      */
     public static function removeSpaces( string $string ): string
     {
-        $string = str_replace( [ "\n", '\n' ], ' ', $string );
+        $string = str_replace( [ "\n", '\n' ], ' ', html_entity_decode( $string ) );
         return self::trim( preg_replace( '/[ \s]+/u', ' ', $string ) );
-    }
-
-    /**
-     * Удаляет табуляцию, перенос каретки. Удаляет повторяющиеся переносы строк и пробельные символы
-     * @param string $string
-     * @return string
-     */
-    public static function normalizeSpaceInString( string $string ): string
-    {
-        $string = trim( str_replace( ' ', ' ', $string ) );
-        $string = preg_replace( '/( )+/', " ", $string );
-        $string = preg_replace( [ '/\t+(( )+)?/', '/\r+(( )+)?/' ], '', $string );
-        $string = preg_replace( '/\n(( )+)?/', "\n", $string );
-        return preg_replace( '/\n+/', "\n", $string );
     }
 
     /**
@@ -199,6 +185,7 @@ class StringHelper
      * @param bool $flag
      * @param array $tags
      * @return null|string
+     * @deprecated
      */
     public static function cutTags( string $string, bool $flag = true, array $tags = [] ): ?string
     {
@@ -272,6 +259,7 @@ class StringHelper
      * Вырезает все атрибуты тегов
      * @param string $string
      * @return string
+     * @deprecated
      */
     public static function cutTagsAttributes( string $string ): string
     {
@@ -282,6 +270,7 @@ class StringHelper
      * Вырезает пустые теги
      * @param string $string
      * @return string
+     * @deprecated
      */
     public static function cutEmptyTags( string $string ): string
     {
@@ -289,7 +278,7 @@ class StringHelper
             '/<[u|o]l>((\s+)?<li>(\s+)?)+<\/[u|o]l>/is',
             '/<(\w+){0,1}[^br]>(\s+)?((<br>(\s+)?)+)?(\s+)?<\/\w+>/i'
         ];
-        $string = preg_replace( $clean_regex, '', self::normalizeSpaceInString( $string ) );
+        $string = preg_replace( $clean_regex, '', self::removeSpaces( $string ) );
         foreach ( $clean_regex as $regex ) {
             if ( preg_match( $regex, $string ) ) {
                 $string = self::cutEmptyTags( $string );
@@ -309,17 +298,17 @@ class StringHelper
 
     public static function ucWords( $string ): string
     {
-        return preg_replace_callback( '/([a-z])([a-z0-9\'"]+|\W+)/iu', static function ( $match ) {
-            return strtoupper( $match[ 1 ] ) . $match[ 2 ];
+        return preg_replace_callback( '/([a-zа-яё])([a-zа-яё0-9\'"]+|\W+)/iu', static function ( $match ) {
+            return mb_strtoupper( $match[ 1 ] ) . $match[ 2 ];
         }, $string );
     }
 
     /**
-     * @param string $string
+     * @param $string
      * @param string|string[] $trim_chars
      * @return string
      */
-    public static function trim( string $string, array|string $trim_chars = '' ): string
+    public static function trim( $string, array|string $trim_chars = '' ): string
     {
         return (string)preg_replace( '/^[\s' . $trim_chars . ']*(?U)(.*)[\s' . $trim_chars . ']*$/u', '\\1', $string );
     }
@@ -388,6 +377,7 @@ class StringHelper
      *
      * @param string $size inch/foot string ex. 1 2/3" or 2.5'
      * @return null|float float when successful parse else false
+     * @deprecated
      */
     public static function parseInch( string $size ): ?float
     {
