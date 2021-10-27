@@ -13,7 +13,6 @@ use App\Feeds\Utils\Collection;
 use App\Feeds\Utils\Data;
 use App\Feeds\Utils\Link;
 use App\Feeds\Utils\ParserCrawler;
-use App\Helpers\FeedHelper;
 use DateTime;
 use Exception;
 use Ms48\LaravelConsoleProgressBar\Facades\ConsoleProgressBar;
@@ -28,42 +27,6 @@ use Ms48\LaravelConsoleProgressBar\Facades\ConsoleProgressBar;
  */
 abstract class AbstractProcessor
 {
-    /**
-     * Указывает номера листов, которые должен обработать прайс-парсер.
-     * Используется в том случае, если прайс-лист содержит несколько листов с необходимой информацией
-     *
-     * Для этого необходимо указать массив чисел, например
-     * public const PRICE_ACTIVE_SHEET = [0, 1, 2]
-     * в котором каждый ключ является идентификатором листа в таблице,
-     * а значение каждого ключа является идентификатором парсера с именем вида Price<число из массива>Parser
-     */
-    public const PRICE_ACTIVE_SHEET = [ 0 ];
-
-    /**
-     * Указывает номера файлов, отсортированных в алфавитном порядке, которые должен обработать прайс-парсер.
-     * Используется в том случае, если необходимо обработать несколько прайс-листов
-     *
-     * Аналогично PRICE_ACTIVE_SHEET необходимо указать массив, в котором ключи являются идентификаторами прайс-листов в хранилище,
-     * а значение каждого ключа является идентификатором парсера
-     */
-    public const PRICE_ACTIVE_FILES = [ 0 ];
-
-    /**
-     * Указывает номера листов, которые должен обработать прайс-парсер в каждом используемом прайс-листе.
-     * Используется в том случае, если необходимо обработать несколько прайс-листов и эти прайс-листы содержат несколько страниц с информацией
-     *
-     * Для этого необходимо указать в массиве идентификаторы страниц для каждого прайс-листа
-     * public const PRICE_ACTIVE_MULTIPLE_SHEET = [ [ 0, 1, 2, 3 ], [ 0, 1, 2 ] ]
-     *
-     * А также в константе PRICE_ACTIVE_FILES указать какие файлы нужно обработать
-     * public const PRICE_ACTIVE_FILES = [ 1, 2 ]
-     *
-     * В этом случае названия парсеров с нулевыми индексами будут выглядеть как раньше, а все остальные будут разделены "_"
-     * Например PriceParser, Price_1Parser, Price_2Parser, Price1Parser, Price1_1Parser, Price1_2Parser
-     *
-     * PriceParser - парсер первой страницы в первом файле. Price_1Parser - парсер второй страницы в первом файле.
-     * Price1Parser - парсер первой страницы во втором файле. Price1_1Parser - парсер второй страницы во втором файле.
-     */
     public const PRICE_ACTIVE_MULTIPLE_SHEET = [];
 
     public const FEED_TYPE_INVENTORY = 'inventory';
@@ -178,6 +141,7 @@ abstract class AbstractProcessor
             //Замена в префиксе Dx _ на -
             $code = str_replace( '_', '-', $codeSplit[ 0 ] );
             $this->dx_info = $dxRepo->getDxInfo( $code, $codeSplit[ 1 ] ?? '' );
+            $this->dx_info[ 'storefront' ] = $codeSplit[ 1 ] ?? null;
         }
         if ( $storage ) {
             $this->storage = $storage;
