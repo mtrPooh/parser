@@ -4,9 +4,7 @@ namespace App\Feeds\Vendors\BNI;
 
 use App\Feeds\Feed\FeedItem;
 use App\Feeds\Parser\HtmlParser;
-use App\Feeds\Utils\Data;
 use App\Feeds\Utils\ParserCrawler;
-use App\Helpers\FeedHelper;
 use App\Helpers\StringHelper;
 
 class Parser extends HtmlParser
@@ -17,56 +15,58 @@ class Parser extends HtmlParser
 
     private const API_URL = 'https://www.brunelli.ca/ecomwgtproductpage/getproductbyselectedattribute';
 
-    public function parseContent( $data, $params = [] ): array
-    {
-        preg_match( '%title="en" href="(.*?)"%ui', $data->getData(), $match );
-
-        $link_en = str_contains( $match[ 1 ], 'http' ) ? $match[ 1 ] : 'https://www.brunelli.ca/' . ltrim( $match[ 1 ], '/' );
-
-        $data = $this->getVendor()->getDownloader()->get( $link_en );
-
-        return parent::parseContent( new Data( $data ), $params );
-    }
-
     public function beforeParse(): void
     {
-        $product_info = FeedHelper::getShortsAndAttributesInList( $this->getHtml( 'div.product-details-desc' ) );
+        $product_info = $this->getShortsAndAttributesInList( $this->getHtml( 'div.product-details-desc' ) );
 
         $this->shorts = $product_info[ 'short_description' ];
         $this->attrs = $product_info[ 'attributes' ];
 
-        foreach ( $this->attrs as $key => $value ) {
-
-            if ( $key === 'Dimensions' || $key === 'Size' ) {
-
-                preg_match_all( '%(\d+.) cm%ui', $value, $matches );
-
-                if ( !empty( $matches[ 1 ][ 0 ] ) ) {
-                    $this->dims[ 'x' ] = StringHelper::getFloat( $matches[ 1 ][ 0 ] / 2.54 );
+        if ( is_array( $this->shorts ) ) {
+            foreach ( $this->shorts as $key => $value ) {
+                if ( str_contains( $value, 'stock' ) || str_contains( $value, 'rriv' ) ) {
+                    unset( $this->shorts[ $key ] );
                 }
-                if ( !empty( $matches[ 1 ][ 1 ] ) ) {
-                    $this->dims[ 'y' ] = StringHelper::getFloat( $matches[ 1 ][ 1 ] / 2.54 );
-                }
-                if ( !empty( $matches[ 1 ][ 2 ] ) ) {
-                    $this->dims[ 'z' ] = StringHelper::getFloat( $matches[ 1 ][ 2 ] / 2.54 );
-                }
+            }
 
-                if ( empty( $this->dims[ 'x' ] ) ) {
+            $this->shorts = array_values( $this->shorts );
+        }
 
-                    preg_match_all( '%(\d+.)%ui', $value, $matches );
+        if ( is_array( $this->attrs ) ) {
+
+            foreach ( $this->attrs as $key => $value ) {
+
+                if ( $key === 'Dimensions' || $key === 'Size' ) {
+
+                    preg_match_all( '%(\d+.) cm%ui', $value, $matches );
 
                     if ( !empty( $matches[ 1 ][ 0 ] ) ) {
-                        $this->dims[ 'x' ] = StringHelper::getFloat( $matches[ 1 ][ 0 ] );
+                        $this->dims[ 'x' ] = StringHelper::getFloat( $matches[ 1 ][ 0 ] / 2.54 );
                     }
                     if ( !empty( $matches[ 1 ][ 1 ] ) ) {
-                        $this->dims[ 'y' ] = StringHelper::getFloat( $matches[ 1 ][ 1 ] );
+                        $this->dims[ 'y' ] = StringHelper::getFloat( $matches[ 1 ][ 1 ] / 2.54 );
                     }
                     if ( !empty( $matches[ 1 ][ 2 ] ) ) {
-                        $this->dims[ 'z' ] = StringHelper::getFloat( $matches[ 1 ][ 2 ] );
+                        $this->dims[ 'z' ] = StringHelper::getFloat( $matches[ 1 ][ 2 ] / 2.54 );
                     }
-                }
 
-                unset( $this->attrs[ $key ] );
+                    if ( empty( $this->dims[ 'x' ] ) ) {
+
+                        preg_match_all( '%(\d+.)%u', $value, $matches );
+
+                        if ( !empty( $matches[ 1 ][ 0 ] ) ) {
+                            $this->dims[ 'x' ] = StringHelper::getFloat( $matches[ 1 ][ 0 ] );
+                        }
+                        if ( !empty( $matches[ 1 ][ 1 ] ) ) {
+                            $this->dims[ 'y' ] = StringHelper::getFloat( $matches[ 1 ][ 1 ] );
+                        }
+                        if ( !empty( $matches[ 1 ][ 2 ] ) ) {
+                            $this->dims[ 'z' ] = StringHelper::getFloat( $matches[ 1 ][ 2 ] );
+                        }
+                    }
+
+                    unset( $this->attrs[ $key ] );
+                }
             }
         }
     }
@@ -155,11 +155,6 @@ class Parser extends HtmlParser
         }
 
         return null;
-    }
-
-    public function getDescription(): string
-    {
-        return $this->getProduct();
     }
 
     public function getShortDescription(): array

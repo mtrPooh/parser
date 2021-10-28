@@ -12,11 +12,11 @@ class Vendor extends HttpProcessor
     public const PRODUCT_LINK_CSS_SELECTORS = [ 'a.product-title' ];
     private const SITE_URL = 'https://www.brunelli.ca/';
 
-    protected array $first = [ 'https://www.brunelli.ca/' ];
+    protected array $first = [ 'https://www.brunelli.ca/en' ];
 
     public function getProductsLinks( Data $data, string $url ): array
     {
-        if ( $url === self::SITE_URL ) {
+        if ( $url === self::SITE_URL . 'en' ) {
             return [];
         }
 
