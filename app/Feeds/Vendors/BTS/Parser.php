@@ -4,21 +4,21 @@ namespace App\Feeds\Vendors\BTS;
 
 use App\Feeds\Parser\HtmlParser;
 use App\Feeds\Utils\ParserCrawler;
-use App\Helpers\FeedHelper;
 use App\Helpers\StringHelper;
 
 class Parser extends HtmlParser
 {
+    protected array $remove_description_patterns = [ '/[\$]+/' ];
+    protected array $clean_description_patterns = [ '/(Product Details|Item number[:\d ]+|UPC[:\d ]+|Barcode[:\d ]+)/ui' ];
+
     public function parseContent( $data, $params = [] ): array
     {
         if ( str_contains( $data->getData(), '>Waitlist Signup<' ) || str_contains( $data->getData(), 'value="Pre-Order"' ) ) {
             return [];
         }
 
-        if ( preg_match( '%<h1(.*?)</h1>%ui', $data->getData(), $match ) ) {
-            if ( str_contains( $match[ 1 ], '$' ) ) {
-                return [];
-            }
+        if ( preg_match( '%<h1(.*?)</h1>%ui', $data->getData(), $match ) && str_contains( $match[ 1 ], '$' ) ) {
+            return [];
         }
 
         return parent::parseContent( $data, $params );
@@ -97,42 +97,7 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        $description = $this->getHtml( 'div.product-information--description' );
-
-        if ( str_contains( $description, '<br>' ) ) {
-            $rows = explode( '<br>', $description );
-            foreach ( $rows as $row ) {
-                if ( str_contains( $row, '$' ) || str_contains( $row, 'Item number' ) || str_contains( $row, 'contact us'
-                    ) ) {
-
-                    $description = str_replace( $row, '', $description );
-                }
-            }
-        }
-        else {
-            $rows = explode( "\n", $description );
-            foreach ( $rows as $row ) {
-                if ( str_contains( $row, '$' ) ) {
-                    $description = str_replace( $row, '', $description );
-                }
-            }
-        }
-
-        preg_match_all( '%<h.*?</h\d+>%', $description, $matches );
-        foreach ( $matches[ 0 ] as $match ) {
-            if ( str_contains( $match, 'Product Details' ) ) {
-                $description = str_replace( $match, '', $description );
-            }
-        }
-
-        $search = [
-            '%<p>\s*Product Details\s*</p>%ui',
-            '%<b>\s*Product Details\s*</b>%ui',
-            '%<hr.*?>%ui'
-        ];
-        $description = trim( preg_replace( $search, '', $description ) );
-
-        return FeedHelper::cleanProductDescription( $description ) ?: $this->getProduct();
+        return $this->getHtml( 'div.product-information--description' ) ?: $this->getProduct();
     }
 
     public function getVideos(): array
